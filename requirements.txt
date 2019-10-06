@@ -1,0 +1,9 @@
+# Write here (line separated) all the python (pip) packages that 
+# need to be installed. The Docker images will then install the 
+# packages automatically when a fresh repository is cloned.
+#
+# eg.
+#
+# opencv
+# numpy>=8.0 etc
+
