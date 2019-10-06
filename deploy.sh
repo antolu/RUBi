@@ -35,7 +35,7 @@ installPackages() {
         sudo usermod -aG docker $USER
     fi
 
-    if [[ $GPU == "nvidia" && -z `command -v nvidia-docker` ]]; then
+    if [[ $GPU == "nvidia" ]]; then
 	echo "Installing Nvidia-Docker and CUDA toolkit"
 	case $ID in
 	    arch)
@@ -102,7 +102,7 @@ parseArguments() {
 	esac
     done
 
-    if [[ $GPU == "none" && -z `lspci | grep -i nvidia` ]]; then
+    if [[ $GPU == "none" && ! -z `lspci | grep -i nvidia` ]]; then
 	GPU="nvidia"
     fi
 
