@@ -30,11 +30,10 @@ installPackages() {
 		sudo apt install -y docker
 		;;
 	esac
+	sudo systemctl start docker
+        sudo systemctl enable docker
+        sudo usermod -aG docker $USER
     fi
-
-    sudo systemctl start docker
-    sudo systemctl enable docker
-    sudo usermod -aG docker $USER
 
     if [[ $GPU == "nvidia" && -z `command -v nvidia-docker` ]]; then
 	echo "Installing Nvidia-Docker and CUDA toolkit"
@@ -168,7 +167,7 @@ if [[ `basename $PWD` != "RUBi" ]]; then
     git checkout $BRANCH
     
     installPackages
-    buildTFImages
+    buildTFImage
     
     ./deploy.sh
     exit 0
