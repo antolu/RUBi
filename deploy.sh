@@ -125,9 +125,9 @@ parseArguments() {
 #............................................................
 buildTFImage() {
     if [[ $GPU == "nvidia" && -z `docker images -q tf-gpu:latest` ]]; then
-	docker build --file ./Dockerfile/tf-gpu.Dockerfile -t tf-gpu:latest .
+	sudo docker build --file ./Dockerfile/tf-gpu.Dockerfile -t tf-gpu:latest .
     elif [[ -z `docker images -q tf-cpu:latest` ]]; then
-	docker build --file ./Dockerfile/tf-cpu.Dockerfile -t tf-cpu:latest .
+	sudo docker build --file ./Dockerfile/tf-cpu.Dockerfile -t tf-cpu:latest .
     fi
 }
 
@@ -169,22 +169,27 @@ runTFContainer() {
 
 parseArguments $@
 
-# Script has been curl'd, clone repo to current folder and deploy
-if [[ `basename $PWD` != "RUBi" ]]; then
-    git clone https://github.com/$REPO/RUBi.git
-    cd RUBi
-    git checkout $BRANCH
+deploy() {
+    # Script has been curl'd, clone repo to current folder and deploy
+    if [[ `basename $PWD` != "RUBi" ]]; then
+	git clone https://github.com/$REPO/RUBi.git
+	cd RUBi
+	git checkout $BRANCH
+	
+	installPackages
+	buildTFImage
+	
+	echo -e "Log out from your user (or close your SSH session), then log in again and cd to the RUBi directory and run the deploy script."
+	exit 0
+    fi
     
-    installPackages
-    buildTFImage
+    removeTFContainer
     
-    ./deploy.sh
-    exit 0
-fi
+    runTFContainer
+    
+    echo -e "\nThe Docker container is now online with the RUBi repo in /home/RUBi."
+    echo 'Execute commands inside the container as <docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python3 ...">'
+}
 
-removeTFContainer
+deploy
 
-runTFContainer
-
-echo -e "\nThe Docker container is now online with the RUBi repo in /home/RUBi."
-echo 'Execute commands inside the container as <docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python3 ...">'
