@@ -1,7 +1,7 @@
-from __future__ import absolute_import, division, print_function unicode_literals
+from __future__ import absolute_import, division, print_function, unicode_literals
 
+import tensorflow as tf
 from tensorflow.keras.losses import Loss
-from tensorflow.nn import softmax_cross_entropy_with_logits as SoftMax_CE
 
 
 class RUBi_loss(Loss):
@@ -28,8 +28,8 @@ class RUBi_loss(Loss):
     - labels: one-hot encodings
     """
     def call(self, labels, logits):
-        L_QM = SoftMax_CE(labels, logits["logits_rubi"])
-        L_QO = SoftMax_CE(labels, logits["logits_q"])
+        L_QM = tf.nn.softmax_cross_entropy_with_logits(labels, logits["logits_rubi"])
+        L_QO = tf.nn.softmax_cross_entropy_with_logits(labels, logits["logits_q"])
 
         return self.lambda1 * L_QM + self.lambda2 * L_QO
 
