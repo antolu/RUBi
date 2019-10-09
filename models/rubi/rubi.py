@@ -20,14 +20,10 @@ class RUBi(Model):
         super(RUBi, self).__init()
         self.model = base_vqa
 
-        mlp_sizes = (2048, 2048, 3000)
-        layers = []
-        for n in range(3):
-            if n == 0:
-                layers.append(Dense(mlp_sizes[n], activation="relu", input_size=4800))
-            else:
-                layers.append(Dense(mlp_sizes[n], activation="relu"))
-        self.mlp = tf.keras.Sequential(layers)
+        self.mlp = Sequential()
+        self.mlp.add(Dense(2048, activation="relu", input_size=(4800,)))
+        self.mlp.add(Dense(2048, activation="relu"))
+        self.mlp.add(Dense(3000, activation="relu", input_size=(2048,)))
 
         self.slp = Dense(3000)
 
