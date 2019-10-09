@@ -119,15 +119,32 @@ parseArguments() {
 
 #............................................................
 #
+# Checks whether Docker needs sudo permissions or nor
+#
+#............................................................
+checkDockerPermissions() {
+    set +e
+
+    docker ps > /dev/null
+    if [[ $? -ne 0 ]]; then
+	echo -e "\n=> Docker seems to need sudo permissions. You probably need to log out from your user and log in again.\n"
+	$SUDO="sudo "
+    fi
+    
+    set -e
+}
+
+#............................................................
+#
 # Builds the Docker images containing TF and Caffe (and any
 #    other packages specified in the Dockerfiles.
 #
 #............................................................
 buildTFImage() {
     if [[ $GPU == "nvidia" && -z `docker images -q tf-gpu:latest` ]]; then
-	sudo docker build --file ./Dockerfile/tf-gpu.Dockerfile -t tf-gpu:latest .
+	$SUDO docker build --file ./Dockerfile/tf-gpu.Dockerfile -t tf-gpu:latest .
     elif [[ -z `docker images -q tf-cpu:latest` ]]; then
-	sudo docker build --file ./Dockerfile/tf-cpu.Dockerfile -t tf-cpu:latest .
+	$SUDO docker build --file ./Dockerfile/tf-cpu.Dockerfile -t tf-cpu:latest .
     fi
 }
 
@@ -145,8 +162,8 @@ removeTFContainer() {
 	    sleep 1
 	done
 	
-	docker stop tf-rubi
-	docker container rm tf-rubi
+	$SUDO docker stop tf-rubi
+	$SUDO docker container rm tf-rubi
     fi
 }
 
@@ -161,9 +178,9 @@ runTFContainer() {
     
     if [[ $GPU == "nvidia" ]]; then
 	DOCKERARGS+=" --gpus all"
-	docker run $DOCKERARGS tf-gpu:latest
+	$SUDO docker run $DOCKERARGS tf-gpu:latest
     else
-	docker run $DOCKERARGS tf-cpu:latest
+	$SUDO docker run $DOCKERARGS tf-cpu:latest
     fi
 }
 
@@ -177,18 +194,19 @@ deploy() {
 	git checkout $BRANCH
 	
 	installPackages
+	checkDockerPermissions
 	buildTFImage
 	
-	echo -e "Log out from your user (or close your SSH session), then log in again and cd to the RUBi directory and run the deploy script."
-	exit 0
+	./deploy.sh
+    else
+	checkDockerPermissions
+	
+	removeTFContainer
+	runTFContainer
+    
+	echo -e "\nThe Docker container is now online with the RUBi repo in /home/RUBi."
+	echo 'Execute commands inside the container as <docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python3 ...">'
     fi
-    
-    removeTFContainer
-    
-    runTFContainer
-    
-    echo -e "\nThe Docker container is now online with the RUBi repo in /home/RUBi."
-    echo 'Execute commands inside the container as <docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python3 ...">'
 }
 
 deploy
