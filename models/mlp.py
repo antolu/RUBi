@@ -5,6 +5,14 @@ from tensorflow.keras import Sequential
 
 
 class MLP(Layer):
+    """
+    Multi-Layer Perceptron block
+    
+    Args:
+     - input_dim: the input neurons on the first layer.
+     - dimensions: a list or tuple of the sizes of the networks.
+     - activation: the activation function for each layer.
+    """
     def __init__(self, input_dim, dimensions, activation="relu"):
         super().__init__()
 
