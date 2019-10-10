@@ -4,7 +4,7 @@ import tensorflow as tf
 from tensorflow.keras.losses import Loss
 
 
-class RUBi_loss(Loss):
+class RUBiLoss(Loss):
     """
     The RUBi loss, superposed question-modality and question-only
     loss. Computes the final loss L_RUBi as
@@ -34,12 +34,12 @@ class RUBi_loss(Loss):
         return self.lambda1 * L_QM + self.lambda2 * L_QO
 
 
-class baseline_loss(Loss):
+class BaselineLoss(Loss):
     """
     The loss of the baseline model. 
     """
     
-    def __init__(self, lambda1, lambda2):
+    def __init__(self):
         super().__init__()
 
     """
@@ -48,4 +48,4 @@ class baseline_loss(Loss):
     - labels: one-hot encodings
     """
     def call(self, labels, logits):
-        return SoftMax_CE(labels, logits["logits"])
+        return tf.nn.softmax_cross_entropy_with_logits(labels, logits["logits"])

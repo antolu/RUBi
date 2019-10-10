@@ -3,8 +3,9 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import tensorflow as tf
+import tensorflow.keras.backend as K
 from models.rubi.rubi import RUBi
-from models.rubi.loss import RUBi_loss, baseline_loss
+from models.rubi.loss import RUBiLoss, BaselineLoss
 from tools.argparse import parse_arguments
 import sys
 
@@ -12,14 +13,10 @@ args = parse_arguments()
 
 # set precision to 16 if required for faster training on Volta architecture
 if args.fp16:
-    import tensorflow.keras.backend as K
-
-    dtype = "float16"
-    K.set_floatx(dtype)
+    K.set_floatx("float16")
 
     # default is 1e-7 which is too small for float16.  Without adjusting the epsilon, we will get NaN predictions because of divide by zero problems
     K.set_epsilon(1e-4)
-    print("fp16")
 
 model = None
 if args.baseline == "baseline":
@@ -31,9 +28,9 @@ elif args.baseline == "updn":
 
 if args.rubi:
     model = RUBi(model)
-    loss = RUBi_loss()
+    loss = RUBiLoss(args["loss-weights"][0], args["loss-weights"][1])
 else:
-    loss = baseline_loss()  
+    loss = BaselineLoss()
 
 optimizer = tf.keras.optimizers.Adam(learning_rate=args.lr)
 
