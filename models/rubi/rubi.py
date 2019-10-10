@@ -4,6 +4,7 @@ import tensorflow as tf
 
 from tensorflow.keras.layers import Dense
 from tensorflow.keras import Model, Sequential
+from models.mlp import MLP
 
 
 class RUBi(Model):
@@ -20,10 +21,9 @@ class RUBi(Model):
         super(RUBi, self).__init()
         self.model = base_vqa
 
-        self.mlp = Sequential()
-        self.mlp.add(Dense(2048, activation="relu", input_size=(4800,)))
-        self.mlp.add(Dense(2048, activation="relu"))
-        self.mlp.add(Dense(3000, activation="relu", input_size=(2048,)))
+        dimensions = (2048, 2048, 3000)
+
+        self.mlp = MLP(4800, dimensions)
 
         self.slp = Dense(3000)
 
