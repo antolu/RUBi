@@ -8,6 +8,8 @@
 
 set -e
 
+DATADIR=data
+
 #............................................................
 #
 # Installs the required packages (i.e. Docker and
@@ -104,6 +106,10 @@ parseArguments() {
 		shift # past argument
 		shift # past value
 		;;
+	    --gcloud)
+		GCLOUD=gcloud
+		shift
+		;;
 	    *)    # unknown option
 		POSITIONAL+=("$1") # save it in an array for later
 		shift # past argument
@@ -116,6 +122,46 @@ parseArguments() {
     fi
 
 }
+
+#...........................................................
+#
+# Download the pretrained features and split them
+#
+#...........................................................
+getVisualFeatures() {
+    if [[ ! -d $DATADIR ]]; then
+        mkdir -p $DATADIR
+    fi
+    
+    cd $DATADIR
+    if [[ ! -z $GCLOUD ]]; then
+	echo "Downloading pretrained features from gcloud servers. Hold your beer."
+	PROJECT_ID=`gcloud config list --format 'value(core.project)' 2>/dev/null`
+	gsutil -u $PROJECT_ID cp gs://bottom-up-attention/trainval_36.zip ./ # 2014 Train/Val Image Features (120K / 25GB)
+	gsutil -u $PROJECT_ID cp gs://bottom-up-attention/test2014_36.zip ./ # 2014 Testing Image Features (40K / 9GB)
+    else
+	echo "Downloading pretrained features from imagecaption. This might take a while..."
+	curl -OL https://imagecaption.blob.core.windows.net/imagecaption/trainval_36.zip
+	curl -OL https://imagecaption.blob.core.windows.net/imagecaption/test2014_36.zip
+    fi
+
+    unzip trainval_36.zip
+    rm -f trainval_36.zip
+    unzip test2014_36.zip
+    rm -f test2014_36.zip
+}
+
+#...........................................................
+#
+# Split visual features into individual .pkl and .npz files
+#
+#..........................................................
+splitVisualFeatures() {
+    docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python2 tools/parse_visual_features.py data/trainval_36/trainval_resnet101_faster_rcnn_genome_36.tsv"
+    docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python2 tools/parse_visual_features.py data/test2014_36/test2014_resnet101_faster_rcnn_genome_36.tsv"
+}
+
+
 
 #............................................................
 #
@@ -197,16 +243,21 @@ deploy() {
 	checkDockerPermissions
 	buildTFImage
 	
-	./deploy.sh
+	getVisualFeatures
+	
+	checkDockerPermissions
+	
+	runTFContainer
+	splitVisualFeatures
     else
 	checkDockerPermissions
 	
 	removeTFContainer
 	runTFContainer
-    
-	echo -e "\nThe Docker container is now online with the RUBi repo in /home/RUBi."
-	echo 'Execute commands inside the container as <docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python3 ...">'
     fi
+    
+    echo -e "\nThe Docker container is now online with the RUBi repo in /home/RUBi."
+    echo 'Execute commands inside the container as <docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python3 ...">'
 }
 
 deploy
