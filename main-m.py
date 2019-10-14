@@ -1,7 +1,7 @@
 import sys
 
 from params import get_parser
-from dataloader import get_dataset
+from dataloader import DataLoader
 
 if __name__ == "__main__":
 
@@ -12,10 +12,12 @@ if __name__ == "__main__":
     args_dict.name = 'retrieval-{}-{}'.format(args_dict.model, args_dict.answer_type)
 
     opts = vars(args_dict)
+    dataloader = DataLoader(args_dict)
     print('------------ Options -------------')
     for k, v in sorted(opts.items()):
         print('%s: %s' % (str(k), str(v)))
     print('-----------------------------------')
 
-    for a in get_dataset(args_dict).take(1):
+    dataset = dataloader.get_dataset()
+    for a in dataset.take(1):
         print(a)
