@@ -6,4 +6,6 @@
 #
 # opencv
 # numpy>=8.0 etc
-
+sklearn
+nltk
+skip_thoughts
