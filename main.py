@@ -6,7 +6,7 @@ import tensorflow as tf
 import tensorflow.keras.backend as K
 from models.rubi.rubi import RUBi
 from models.rubi.loss import RUBiLoss, BaselineLoss
-from tools.argparse import parse_arguments
+from tools.parse_args import parse_arguments
 import sys
 
 args = parse_arguments()

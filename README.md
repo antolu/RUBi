@@ -18,4 +18,5 @@ curl -OL https://raw.githubusercontent.com/antolu/RUBi/master/deploy.sh && bash 
 The deploy script additionally supports the following flags:
 * `-r` / `--repo` - the user to pull the repo from, default is antolu.
 * `-b` / `--branch` - the branch to checkout, default is master. 
+* `--gloud` - Use gcloud servers to download pretrained visual features, which is 40 times faster than getting them from standard imagecaption.
 
