@@ -1,39 +1,40 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import tensorflow as tf
-
-from tensorflow.keras.layers import Dense
-from tensorflow.keras import Model, Sequential
 from models.mlp import MLP
 
+import torch
+import torch.nn as nn
 
-class RUBi(Model):
+
+class RUBi(nn.Module):
     """
-    Similar to the PyTorch implementation the RUBi wraps the original model,
+    Similar to the original implementation the RUBi wraps the original model,
     and requires the model to return a dictionary containing the 'logits' key
     as well as a 'q_emb' key. 
     Returns a dictionary containing:
      - 'logits': the original logits from the base model
      - 'logits_rubi': the updated predictions from the model by the mask
-     - 'logits_q': the predictions from the question-only branch 
+     - 'logits_q': the predictions from the question-only branch
     """
     def __init__(self, base_vqa):
-        super(RUBi, self).__init()
+        super().__init__()
         self.model = base_vqa
 
-        dimensions = (2048, 2048, 3000)
-
+        dimensions = [2048, 2048, 3000]
         self.mlp = MLP(4800, dimensions)
 
-        self.slp = Dense(3000)
+        self.slp = nn.Linear(3000, 3000)
 
-    def call(self, text, image):
-        base_out = self.model(text, image)
+    def forward(self, inputs):
+        text = inputs["q_text"]
+        visual_emb = inputs["visual_emb"]
+        
+        base_out = self.model(text, visual_emb)
         
         x = self.mlp(base_out['q_emb'])
 
-        mask = tf.math.sigmoid(x)
-        aQM = tf.math.multiply(mask, base_out['logits'])
+        mask = nn.Sigmoid(x)
+        aQM = mask * base_out['logits']
 
         aQO = self.slp(x)
 

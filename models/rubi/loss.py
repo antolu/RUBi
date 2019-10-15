@@ -1,14 +1,14 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import tensorflow as tf
-from tensorflow.keras.losses import Loss
+import torch
+import torch.nn as nn
 
 
-class RUBiLoss(Loss):
+class RUBiLoss:
     """
     The RUBi loss, superposed question-modality and question-only
     loss. Computes the final loss L_RUBi as
-    `L_RUBi = lambda1 * L_QM + lambda2 * L_QO`. 
+    `L_RUBi = lambda1 * L_QM + lambda2 * L_QO`.
 
     Args:
       lambda1: The scalar which determines the importance of the
@@ -18,34 +18,34 @@ class RUBiLoss(Loss):
     """
     
     def __init__(self, lambda1, lambda2):
-        super().__init__()
         self.lambda1 = lambda1
         self.lambda2 = lambda2
+        self.loss = nn.CrossEntropyLoss()
 
     """
     Parameters:
     - predictions: a dict containing keys 'logits', 'logits_q', 'logits'
     - labels: one-hot encodings
     """
-    def call(self, labels, logits):
-        L_QM = tf.nn.softmax_cross_entropy_with_logits(labels, logits["logits_rubi"])
-        L_QO = tf.nn.softmax_cross_entropy_with_logits(labels, logits["logits_q"])
+    def __call__(self, labels, logits):
+        L_QM = self.loss(logits["logits_rubi"], labels)
+        L_QO = self.loss(logits["logits_q"], labels)
 
         return self.lambda1 * L_QM + self.lambda2 * L_QO
 
 
-class BaselineLoss(Loss):
+class BaselineLoss:
     """
     The loss of the baseline model. 
     """
     
     def __init__(self):
-        super().__init__()
+        self.loss = nn.CrossEntropyLoss()
 
     """
     Parameters:
     - predictions: a dict containing the key'logits'
     - labels: one-hot encodings
     """
-    def call(self, labels, logits):
-        return tf.nn.softmax_cross_entropy_with_logits(labels, logits["logits"])
+    def __call__(self, labels, logits):
+        return nn.CrossEntropyLoss(logits["logits"], labels)

@@ -196,6 +196,17 @@ buildTFImage() {
 
 #............................................................
 #
+# Builds Docker image containing Pytorch and pip3 and any
+#   other packages specified in the Dockerfile and
+#   requirements.txt 
+#
+#............................................................
+buildPyTorchImage() {
+    $SUDO docker build --file ./Dockerfile/pytorch.Dockerfile -t pytorch-rubi
+}
+
+#............................................................
+#
 # Removes the existing TF container (by name) to make room
 #   for a new one.
 #
@@ -210,6 +221,25 @@ removeTFContainer() {
 	
 	$SUDO docker stop tf-rubi
 	$SUDO docker container rm tf-rubi
+    fi
+}
+
+#............................................................
+#
+# Removes the existing Pytorch container (by name) to make room
+#   for a new one.
+#
+#............................................................
+removePyTorchContainer() {
+    if [[ `docker ps | grep pytorch-rubi` != "" ]]; then
+	echo "Stopping and removing existing container, press CTRL-C within 5 secs to cancel"
+	for ((i=5; i>=1; i--)); do
+    	    echo $i
+	    sleep 1
+	done
+	
+	$SUDO docker stop pytorch-rubi
+	$SUDO docker container rm pytorch-rubi
     fi
 }
 
@@ -230,6 +260,18 @@ runTFContainer() {
     fi
 }
 
+#............................................................
+#
+# Runs a new PyTorch container, gpu or cpu depending on
+#   environment variable GPU
+#
+#............................................................
+runPyTorchContainer() {
+    DOCKERARGS="-tid -p 8888:8888 --name pytorch-rubi -v $PWD:/home/RUBi"
+    
+    $SUDO docker run $DOCKERARGS pytorch-rubi:latest
+}
+
 parseArguments $@
 
 deploy() {
@@ -241,23 +283,23 @@ deploy() {
 	
 	installPackages
 	checkDockerPermissions
-	buildTFImage
+	buildPyTorchImage
 	
 	getVisualFeatures
 	
 	checkDockerPermissions
 	
-	runTFContainer
+	runPyTorchContainer
 	splitVisualFeatures
     else
 	checkDockerPermissions
 	
-	removeTFContainer
-	runTFContainer
+	removePyTorchContainer
+	runPyTorchContainer
     fi
     
     echo -e "\nThe Docker container is now online with the RUBi repo in /home/RUBi."
-    echo 'Execute commands inside the container as <docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python3 ...">'
+    echo 'Execute commands inside the container as <docker exec -it -w /home/RUBi -u $(id -u):$(id -g) pytorch-rubi bash -c "python3 ...">'
 }
 
 deploy
