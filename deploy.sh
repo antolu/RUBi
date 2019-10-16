@@ -1,7 +1,7 @@
 #!/bin/bash
 #
 # Speedy script to install Docker and Nvidia-Docker
-# and deploy the RUBi code inside a tensorflow 
+# and deploy the RUBi code inside a PyTorch
 # Docker container. 
 #
 # ........................................................
@@ -22,53 +22,69 @@ installPackages() {
     
     source /etc/os-release
     if [[ -z `command -v docker` ]]; then
-	echo "Installing Docker"
-	case $ID in
-	    arch)
-		sudo pacman -Sy --needed --noconfirm docker
-		;;
-	    ubuntu|debian)
-		sudo apt update
-	        sudo apt-get install -y \
-                    apt-transport-https \
-                    ca-certificates \
-                    curl \
-                    gnupg-agent \
-                    software-properties-common
-		curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
-		sudo apt-key fingerprint 0EBFCD88
-	        sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
+        echo "Installing Docker"
+        case $ID in
+            arch)
+                sudo pacman -Sy --needed --noconfirm docker
+            ;;
+            ubuntu|debian)
+                sudo apt-get update
+                sudo apt-get install -y \
+                        apt-transport-https \
+                        ca-certificates \
+                        curl \
+                        gnupg-agent \
+                        software-properties-common
+                curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+                sudo apt-key fingerprint 0EBFCD88
+                sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable"
                 sudo apt-get install -y docker-ce docker-ce-cli containerd.io
-		;;
-	esac
-	sudo systemctl start docker
-        sudo systemctl enable docker
-        sudo usermod -aG docker $USER
+            ;;
+        esac
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    sudo usermod -aG docker $USER
+    fi
+
+    if [[ -z `command -v axel` ]]; then
+        echo "Installing Axel for faster downloads"
+        case $ID in
+            arch)
+                sudo pacman -Sy --needed --noconfirm axel
+            ;;
+            ubuntu|debian)
+                sudo apt-get update
+                sudo apt-get install -y axel
+            ;;
+        esac
+    sudo systemctl start docker
+    sudo systemctl enable docker
+    sudo usermod -aG docker $USER
     fi
 
     if [[ $GPU == "nvidia" ]]; then
-	echo "Installing Nvidia-Docker and CUDA toolkit"
-	case $ID in
-	    arch)
-		sudo pacman -Sy --needed --noconfirm cuda
-		
-		git clone https://aur.archlinux.org/libnvidia-container.git
-		cd libnvidia-container
-		makepkg -sci --needed --noconfirm
-		cd ..
+    echo "Installing Nvidia-Docker and CUDA toolkit"
+    case $ID in
+        arch)
+        sudo pacman -Sy --needed --noconfirm cuda
+        
+        git clone https://aur.archlinux.org/libnvidia-container.git
+        cd libnvidia-container
+        makepkg -sci --needed --noconfirm
+        cd ..
 
-		git clone https://aur.archlinux.org/nvidia-container-toolkit.git
-		cd nvidia-container-toolkit
-		makepkg -sci --needed --noconfirm
-		cd ..
+        git clone https://aur.archlinux.org/nvidia-container-toolkit.git
+        cd nvidia-container-toolkit
+        makepkg -sci --needed --noconfirm
+        cd ..
 
-		rm -rf libnvidia-container nvidia-container-toolkit
-		;;
-	    ubuntu|debian)
-		sudo apt install -y nvidia-cuda-toolkit nvidia-container-toolkit
-		;;
-	esac
-	sudo systemctl restart docker
+        rm -rf libnvidia-container nvidia-container-toolkit
+        ;;
+        ubuntu|debian)
+        sudo apt install -y nvidia-cuda-toolkit nvidia-container-toolkit
+        ;;
+    esac
+    sudo systemctl restart docker
     fi
 
     cd $OLD_DIR
@@ -86,39 +102,38 @@ parseArguments() {
     BRANCH="master"
 
     POSITIONAL=()
-    while [[ $# -gt 0 ]]
-    do
-	key="$1"
+    while [[ $# -gt 0 ]]; do
+        key="$1"
 
-	case $key in
-	    --runtime)
-		GPU="$2"
-		shift # past argument
-		shift # past value
-		;;
-	    -r|--repo)
-		REPO="$2"
-		shift # past argument
-		shift # past value
-		;;
-	    -b|--branch)
-		BRANCH="$2"
-		shift # past argument
-		shift # past value
-		;;
-	    --gcloud)
-		GCLOUD=gcloud
-		shift
-		;;
-	    *)    # unknown option
-		POSITIONAL+=("$1") # save it in an array for later
-		shift # past argument
-		;;
-	esac
+        case $key in
+            --runtime)
+                GPU="$2"
+                shift # past argument
+                shift # past value
+                ;;
+            -r|--repo)
+                REPO="$2"
+                shift # past argument
+                shift # past value
+                ;;
+            -b|--branch)
+                BRANCH="$2"
+                shift # past argument
+                shift # past value
+            ;;
+            --gcloud)
+                GCLOUD=gcloud
+                shift
+            ;;
+            *)    # unknown option
+                POSITIONAL+=("$1") # save it in an array for later
+                shift # past argument
+            ;;
+        esac
     done
 
     if [[ $GPU == "none" && ! -z `lspci | grep -i nvidia` ]]; then
-	GPU="nvidia"
+        GPU="nvidia"
     fi
 
 }
@@ -134,21 +149,24 @@ getVisualFeatures() {
     fi
     
     cd $DATADIR
+
     if [[ ! -z $GCLOUD ]]; then
-	echo "Downloading pretrained features from gcloud servers. Hold your beer."
-	PROJECT_ID=`gcloud config list --format 'value(core.project)' 2>/dev/null`
-	gsutil -u $PROJECT_ID cp gs://bottom-up-attention/trainval_36.zip ./ # 2014 Train/Val Image Features (120K / 25GB)
-	gsutil -u $PROJECT_ID cp gs://bottom-up-attention/test2014_36.zip ./ # 2014 Testing Image Features (40K / 9GB)
+        echo "Downloading pretrained features from gcloud servers. Hold your beer."
+        PROJECT_ID=`gcloud config list --format 'value(core.project)' 2>/dev/null`
+        gsutil -u $PROJECT_ID cp gs://bottom-up-attention/trainval_36.zip ./ # 2014 Train/Val Image Features (120K / 25GB)
+        gsutil -u $PROJECT_ID cp gs://bottom-up-attention/test2014_36.zip ./ # 2014 Testing Image Features (40K / 9GB)
     else
-	echo "Downloading pretrained features from imagecaption. This might take a while..."
-	curl -OL https://imagecaption.blob.core.windows.net/imagecaption/trainval_36.zip
-	curl -OL https://imagecaption.blob.core.windows.net/imagecaption/test2014_36.zip
+        echo "Downloading pretrained features from imagecaption. This might take a while..."
+        curl -OL https://imagecaption.blob.core.windows.net/imagecaption/trainval_36.zip
+        curl -OL https://imagecaption.blob.core.windows.net/imagecaption/test2014_36.zip
     fi
 
     unzip trainval_36.zip
     rm -f trainval_36.zip
     unzip test2014_36.zip
     rm -f test2014_36.zip
+
+    cd ..
 }
 
 #...........................................................
@@ -161,6 +179,45 @@ splitVisualFeatures() {
     docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python2 tools/parse_visual_features.py data/test2014_36/test2014_resnet101_faster_rcnn_genome_36.tsv"
 }
 
+#...........................................................
+#
+# Get VQA dataset
+#
+#..........................................................
+getVQADataset() {
+    echo "=> Getting the VQA dataset"
+
+    if [[ ! -d $DATADIR ]]; then
+        mkdir -p $DATADIR
+    fi
+
+    echo "Getting COCO"
+    cd $DATADIR
+
+    axel -qn20 http://images.cocodataset.org/zips/train2014.zip
+    axel -qn20 http://images.cocodataset.org/zips/val2014.zip
+    axel -qn20 http://images.cocodataset.org/zips/test2014.zip
+
+    unzip train2014.zip
+    rm -f train2014.zip
+    unzip val2014.zip
+    rm -f val2014.zip
+    unzip test2014.zip
+    rm -f test2014.zip
+
+#    echo "Getting VQA v2"
+#    axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Train_mscoco.zip
+#    axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Train_mscoco.zip
+#    axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Test_mscoco.zip
+
+    echo "Getting VQA-CP v2"
+    axel -qn20 https://computing.ece.vt.edu/~aish/vqacp/vqacp_v2_train_annotations.json
+    axel -qn20 https://computing.ece.vt.edu/~aish/vqacp/vqacp_v2_train_questions.json
+    axel -qn20 https://computing.ece.vt.edu/~aish/vqacp/vqacp_v2_test_annotations.json
+    axel -qn20 https://computing.ece.vt.edu/~aish/vqacp/vqacp_v2_test_questions.json
+
+    cd ..
+}
 
 
 #............................................................
@@ -173,8 +230,8 @@ checkDockerPermissions() {
 
     docker ps > /dev/null
     if [[ $? -ne 0 ]]; then
-	echo -e "\n=> Docker seems to need sudo permissions. You probably need to log out from your user and log in again.\n"
-	$SUDO="sudo "
+        echo -e "\n=> Docker seems to need sudo permissions. You probably need to log out from your user and log in again.\n"
+        $SUDO="sudo "
     fi
     
     set -e
@@ -188,9 +245,9 @@ checkDockerPermissions() {
 #............................................................
 buildTFImage() {
     if [[ $GPU == "nvidia" && -z `docker images -q tf-gpu:latest` ]]; then
-	$SUDO docker build --file ./Dockerfile/tf-gpu.Dockerfile -t tf-gpu:latest .
+        $SUDO docker build --file ./Dockerfile/tf-gpu.Dockerfile -t tf-gpu:latest .
     elif [[ -z `docker images -q tf-cpu:latest` ]]; then
-	$SUDO docker build --file ./Dockerfile/tf-cpu.Dockerfile -t tf-cpu:latest .
+        $SUDO docker build --file ./Dockerfile/tf-cpu.Dockerfile -t tf-cpu:latest .
     fi
 }
 
@@ -202,7 +259,7 @@ buildTFImage() {
 #
 #............................................................
 buildPyTorchImage() {
-    $SUDO docker build --file ./Dockerfile/pytorch.Dockerfile -t pytorch-rubi
+    $SUDO docker build --file ./Dockerfile/pytorch.Dockerfile -t pytorch-rubi --build-args GPU=$GPU.
 }
 
 #............................................................
@@ -213,14 +270,14 @@ buildPyTorchImage() {
 #............................................................
 removeTFContainer() {
     if [[ `docker ps | grep tf-rubi` != "" ]]; then
-	echo "Stopping and removing existing container, press CTRL-C within 5 secs to cancel"
-	for ((i=5; i>=1; i--)); do
-    	    echo $i
-	    sleep 1
-	done
-	
-	$SUDO docker stop tf-rubi
-	$SUDO docker container rm tf-rubi
+        echo "Stopping and removing existing container, press CTRL-C within 5 secs to cancel"
+        for ((i=5; i>=1; i--)); do
+            echo $i
+            sleep 1
+        done
+
+        $SUDO docker stop tf-rubi
+        $SUDO docker container rm tf-rubi
     fi
 }
 
@@ -253,10 +310,10 @@ runTFContainer() {
     DOCKERARGS="-tid -p 8888:8888 --name tf-rubi -v $PWD:/home/RUBi"
     
     if [[ $GPU == "nvidia" ]]; then
-	DOCKERARGS+=" --gpus all"
-	$SUDO docker run $DOCKERARGS tf-gpu:latest
+        DOCKERARGS+=" --gpus all"
+        $SUDO docker run $DOCKERARGS tf-gpu:latest
     else
-	$SUDO docker run $DOCKERARGS tf-cpu:latest
+        $SUDO docker run $DOCKERARGS tf-cpu:latest
     fi
 }
 
@@ -277,25 +334,25 @@ parseArguments $@
 deploy() {
     # Script has been curl'd, clone repo to current folder and deploy
     if [[ `basename $PWD` != "RUBi" ]]; then
-	git clone https://github.com/$REPO/RUBi.git
-	cd RUBi
-	git checkout $BRANCH
-	
-	installPackages
-	checkDockerPermissions
-	buildPyTorchImage
-	
-	getVisualFeatures
-	
-	checkDockerPermissions
-	
-	runPyTorchContainer
-	splitVisualFeatures
+        git clone https://github.com/$REPO/RUBi.git
+        cd RUBi
+        git checkout $BRANCH
+
+        installPackages
+        checkDockerPermissions
+        buildPyTorchImage
+
+        getVisualFeatures
+
+        checkDockerPermissions
+
+        runPyTorchContainer
+        splitVisualFeatures
     else
-	checkDockerPermissions
-	
-	removePyTorchContainer
-	runPyTorchContainer
+        checkDockerPermissions
+
+        removePyTorchContainer
+        runPyTorchContainer
     fi
     
     echo -e "\nThe Docker container is now online with the RUBi repo in /home/RUBi."
