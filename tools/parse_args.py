@@ -6,7 +6,7 @@ def parse_arguments():
 
     # Arguments concerning the environment of the repository
     parser.add_argument("-d", "--dataset", type=str, default="vqa-v2-cp",
-                        help="The dataset to train/test on.")
+                        help="The dataset to train/test on. (vqa-v2-cp | vqa-v2)")
     parser.add_argument("--datadir", type=str, default="data",
                         help="Path to the root directory containing the datasets.")
     parser.add_argument('--dir_images', type=str, default='images',
@@ -16,7 +16,8 @@ def parse_arguments():
     parser.add_argument('--dir_model', default='Models/',
                         help='Path to project data')
 
-    parser.add_argument('--answer-type', default='number', type=str, dest="answer_type", choices=["number", "yes-no", "other"], help='answer type (number | yes-no | other)')
+    parser.add_argument('--answer-type', default='number', type=str, dest="answer_type",
+                        choices=["all", "number", "yes-no", "other"], help='answer type (all | number | yes-no | other)')
 
 
     # Arguments concerning training and testing the model
@@ -25,6 +26,8 @@ def parse_arguments():
                            help="Train the model")
     traintest.add_argument("--test", action="store_true",
                            help="Test the model")
+    traintest.add_argument("--test_dev", action="store_true",
+                           help="Test-dev the model")
     parser.add_argument("--no-epochs", type=int, default=1000000, dest="no_epochs",
                         help="Number of epochs to train the model")
     parser.add_argument("-lr", "--lr", type=float, default=1.5e-4,
