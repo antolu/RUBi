@@ -2,24 +2,26 @@
 
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-import tensorflow as tf
-import tensorflow.keras.backend as K
+import torch
+import torch.optim as optim
+
+from models.rubi.baseline_net import BaselineNet
 from models.rubi.rubi import RUBi
 from models.rubi.loss import RUBiLoss, BaselineLoss
 from tools.parse_args import parse_arguments
-import sys
+from utilities.earlystopping import EarlyStopping
+from datetime import datetime
+
 
 args = parse_arguments()
 
-# set precision to 16 if required for faster training on Volta architecture
-if args.fp16:
-    K.set_floatx("float16")
-
-    # default is 1e-7 which is too small for float16.  Without adjusting the epsilon, we will get NaN predictions because of divide by zero problems
-    K.set_epsilon(1e-4)
+# Check if GPU can be used, else use CPU
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print("Using device {device}.")
 
 model = None
 if args.baseline == "baseline":
+    model = BaselineNet().to(device)
     raise NotImplementedError()
 elif args.baseline == "san":
     raise NotImplementedError()
@@ -27,56 +29,81 @@ elif args.baseline == "updn":
     raise NotImplementedError()
 
 if args.rubi:
-    model = RUBi(model)
+    model = RUBi(model).to(device)
     loss = RUBiLoss(args["loss-weights"][0], args["loss-weights"][1])
 else:
     loss = BaselineLoss()
 
-optimizer = tf.keras.optimizers.Adam(learning_rate=args.lr)
+# Load pretrained model if exists
+if args.pretrained_model:
+    pretrained_model = torch.load(args.pretrained_model, map_device=device)
+    model.load_state_dict(pretrained_model["model"])
 
-train_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='train_accuracy')
-test_accuracy = tf.keras.metrics.SparseCategoricalAccuracy(name='test_accuracy')
-
-
-@tf.function
-def train_step(images, labels):
-    with tf.GradientTape() as tape:
-        predictions = model(images)
-        current_loss = loss(labels, predictions)
-        gradients = tape.gradient(current_loss, model.trainable_variables)
-        optimizer.apply_gradients(zip(gradients, model.trainable_variables))
-        
-        train_accuracy(labels, predictions)
-
-        return current_loss
-
-    
-@tf.function
-def test_step(images, labels):
-    predictions = model(images)
-    t_loss = loss(labels, predictions)
-    
-    test_accuracy(labels, predictions)
-
-    return t_loss
-
+# TODO: read in datasets
+dataloader = None
 
 if args.train:
-    raise NotImplementedError()
-    old_loss = 1e8
-    epoch = 0
-    
-    while True:
-        if abs(epoch - args["no-epochs"]) < args.eps:
-            break
-        
-        images, labels = None
-        new_loss = train_step(images, labels)
-        epoch += 1
+    model.train()
 
-    print("Training complete after {} epochs.".format(epoch))
-    
-    # save model
-    # implement a progress bar
+    # Initialize parameters in network
+
+    optimizer = optim.Adamax(model.parameters(), lr=args.lr)
+    # TODO: implement a LR scheduler
+
+    # use FP16
+    if args.fp16:
+        import amp
+        model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
+
+    if args.pretrained_model:
+        optimizer.load_state_dict(args.pretrained_model["optimizer"])
+        if args.fp16:
+            amp.load_state_dict(args.pretrained_model["amp"])
+
+    es = EarlyStopping(min_delta=args.eps, patience=args.patience)
+
+    try:
+        epoch = 0
+        while True:
+            epoch += 1
+
+            # assume inputs is a dict
+            for i_batch, inputs in enumerate(dataloader):
+                for key, value in inputs:
+                    value.to(device)
+
+                model.zero_grad()
+                predictions = model(inputs)
+                current_loss = loss(inputs["answers"], predictions)
+
+                if args.fp16:
+                    with amp.scale_loss(current_loss, optimizer) as scaled_loss:
+                        scaled_loss.backward()
+                else:
+                    current_loss.backward()
+
+                optimizer.step()
+
+                # early stopping if loss hasn't improved
+                if es.step(current_loss):
+                    break
+
+        print("Training complete after {} epochs.".format(epoch))
+    except KeyboardInterrupt:
+        print("Training canceled. ")
+        pass
+    finally:
+        # Save checkpoint
+        checkpoint = {
+            'model': model.state_dict(),
+            'optimizer': optimizer.state_dict()
+        }
+        if args.fp16:
+            checkpoint['amp'] = amp.state_dict()
+
+        filename = args.model + "_epoch_{}_dataset_{}_{}.pt".format(epoch, args.dataset, datetime.now().strftime("%Y%m%d%H%M%S"))
+        torch.save(checkpoint, filename)
+
+    # implement tensorboard
 elif args.test:
     raise NotImplementedError()
