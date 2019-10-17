@@ -3,13 +3,14 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import torch
-import sys
 import amp
 
 from models.rubi.baseline_net import BaselineNet
 from models.rubi.rubi import RUBi
 from models.rubi.loss import RUBiLoss, BaselineLoss
 from tools.parse_args import parse_arguments
+from utilities.earlystopping import EarlyStopping
+from datetime import datetime
 
 
 args = parse_arguments()
@@ -35,16 +36,13 @@ else:
 
 # Load pretrained model if exists
 if args.pretrained_model:
-    model.load(args.pretrained_model, map_location=device)
+    pretrained_model = torch.load(args.pretrained_model, map_device=device)
+    model.load_state_dict(pretrained_model["model"])
 
 # TODO: read in datasets
 dataloader = None
 
 if args.train:
-    raise NotImplementedError()
-
-    old_loss = 1e8
-    epoch = 0
     model.train()
 
     # Initialize parameters in network
@@ -56,10 +54,17 @@ if args.train:
     if args.fp16:
         model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
 
+    if args.pretrained_model:
+        optimizer.load_state_dict(args.pretrained_model["optimizer"])
+        if args.fp16:
+            amp.load_state_dict(args.pretrained_model["amp"])
+
+    es = EarlyStopping(min_delta=args.eps, patience=args.patience)
+
     try:
+        epoch = 0
         while True:
-            if abs(epoch - args["no-epochs"]) < args.eps:
-                break
+            epoch += 1
 
             # assume inputs is a dict
             for i_batch, inputs in enumerate(dataloader):
@@ -68,7 +73,7 @@ if args.train:
 
                 model.zero_grad()
                 predictions = model(inputs)
-                current_loss = loss(labels, predictions)
+                current_loss = loss(inputs["answers"], predictions)
 
                 if args.fp16:
                     with amp.scale_loss(current_loss, optimizer) as scaled_loss:
@@ -78,7 +83,9 @@ if args.train:
 
                 optimizer.step()
 
-                # TODO: early stopping
+                # early stopping if loss hasn't improved
+                if es.step(current_loss):
+                    break
 
         print("Training complete after {} epochs.".format(epoch))
     except KeyboardInterrupt:
@@ -92,8 +99,9 @@ if args.train:
         }
         if args.fp16:
             checkpoint['amp'] = amp.state_dict()
-        # TODO: give proper naming to checkpoints
-        torch.save(checkpoint, 'amp_checkpoint.pt')
+
+        filename = args.model + "_epoch_{}_dataset_{}_{}.pt".format(epoch, args.dataset, datetime.now().strftime("%Y%m%d%H%M%S"))
+        torch.save(checkpoint, filename)
 
     # implement tensorboard
 elif args.test:
