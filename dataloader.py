@@ -27,7 +27,6 @@ from PIL import Image
 class DataLoaderVQA(data.Dataset):
     def __init__(self, 
                  args_dict,
-                 set,
                  dir_data='data',
                  coco_train_path="data/train2014",
                  coco_val_path="data/val2014",
@@ -41,7 +40,6 @@ class DataLoaderVQA(data.Dataset):
         """
 
         self.args_dict = args_dict
-        self.set = set
         self.dir_data = dir_data
         self.coco_train_path = coco_train_path
         self.coco_val_path = coco_val_path
@@ -59,24 +57,24 @@ class DataLoaderVQA(data.Dataset):
     
         # choose train or test dataset
         if self.dataset == 'vqacp_v2':
-            if self.set == 'train':
+            if args_dict.train:
                 df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_annotations.json'))
                 df_quest = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_questions.json'))
 
-            elif self.set == 'test':
+            elif args_dict.test:
                 df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_test_annotations.json'))
                 df_quest = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_test_questions.json'))
                 
         elif self.dataset == 'vqa_v2':
-            if self.set == 'train':
+            if args_dict.train:
                 df_annot = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_mscoco_train2014_annotations.json')))
                 df_quest = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_train2014_questions.json')))
 
-            elif self.set == 'test':
+            elif args_dict.test:
                 df_annot = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_mscoco_val2014_annotations.json')))
                 df_quest = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_val2014_questions.json')))
 
-            elif self.set == 'test-dev':
+            elif args_dict.test_dev:
                 df_annot = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_mscoco_val2014_annotations.json')))
                 df_quest = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_test-dev2015_questions.json')))
                 
