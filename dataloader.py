@@ -1,117 +1,122 @@
-import numpy as np
-import pandas as pd
-import pickle
-import tensorflow as tf
 import os
+import pickle
+import string
+import json
+import numpy as np
+import torch
+import torch.utils.data as data
+import pandas as pd
+import torchvision.transforms as transforms
 
-AUTOTUNE = tf.data.experimental.AUTOTUNE
+from PIL import Image
 
-
-class DataLoader:
-    def __init__(self,
+class DataLoaderVQA(data.Dataset):
+    def __init__(self, 
                  args_dict,
-                 data_dir="data",
+                 set,
+                 dir_data='data',
                  coco_train_path="data/train2014",
                  coco_val_path="data/val2014",
                  trainval_features_path="data/trainval_36",
                  test_features_path="data/test2014_36"):
+        """
+        Args:
+            args_dic: parameters dict
+            set: 'train', 'val', 'test'
+            transform: data transform
+        """
 
         self.args_dict = args_dict
+        self.set = set
+        self.dir_data = dir_data
         self.coco_train_path = coco_train_path
         self.coco_val_path = coco_val_path
         self.trainval_features_path = trainval_features_path
         self.test_features_path = test_features_path
-        
-    def get_dataset(self):
-        """
-        This function return a tf.data.Dataset in the format : [img_embadding, question, answer]
-        """
+        self.answer_type = args_dic.answer_type # list : ['yes/no', 'number', 'other']
+        self.dataset = args_dic.dataset  # vqacp_v2 | vqa_v2
+        # self.dataset = 'vqa_v2'
+        # self.answer_type = ['number']
 
-        df_annot = pd.read_json(os.path.join(self.data_dir, 'vqacp_v2_train_annotations.json'))
-        top_3000_answer = set(list(df_annot['multiple_choice_answer'].value_counts(3000).index))
+        # only use the top 3000 answers
+        df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_annotations.json'))
+        top_3000_answer = list(df_annot['multiple_choice_answer'].value_counts().index)[:3000]
     
-        if self.args_dict == "train":
-            
-            df_quest = pd.read_json(os.path.join(self.args_dict.dir_data, 'vqacp_v2_train_questions.json'))
-            df = pd.merge(df_annot[['question_type', 'multiple_choice_answer',
-                                    'image_id', 'answer_type', 'question_id']]
-                          , df_quest[['coco_split', 'question', 'question_id']], on='question_id')
-            
-            
-            df = df[(df['coco_split'] == 'train2014') & (df['multiple_choice_answer'].isin(top_3000_answer))]
-            d_question = tf.data.Dataset.from_tensor_slices(df['question'])
-            d_answer = tf.data.Dataset.from_tensor_slices(df['multiple_choice_answer'])
-            
-        elif self.args_dict.mode == 'val':
-            df_quest = pd.read_json(os.path.join(, 'vqacp_v2_train_questions.json'))
-            df = pd.merge(df_annot[['question_type', 'multiple_choice_answer',
-                                    'image_id', 'answer_type', 'question_id']]
-                          , df_quest[['coco_split', 'question', 'question_id']], on='question_id')
-            
-            df = df[(df['coco_split'] == 'val2014') & (df['multiple_choice_answer'].isin(top_3000_answer))]
-            d_question = tf.data.Dataset.fom_tensor_slices(df['question'])
-            d_answer = tf.data.Dataset.from_tensor_slices(df['multiple_choice_answer'])
-            
-        elif self.args_dict.mode == 'test':  # TODO: understand the test dataset. Why there is a train2014 and val2014 ?
-            df_annot = pd.read_json(os.path.join(self.args_dict.dir_data, 'vqacp_v2_test_annotations.json'))
-            df_quest = pd.read_json(os.path.join(self.args_dict.dir_data, 'vqacp_v2_test_questions.json'))
-            df = pd.merge(df_annot[['question_type', 'multiple_choice_answer',
-                                    'image_id', 'answer_type', 'question_id']]
-                          , df_quest[['coco_split', 'question', 'question_id']], on='question_id')
-            
-            df = df[(df['coco_split'] == 'val2014') & (df['multiple_choice_answer'].isin(top_3000_answer))]
-            d_question = tf.data.Dataset.from_tensor_slices(df[df['coco_split'] == 'val2014']['question'])
-            d_answer = tf.data.Dataset.from_tensor_slices(df[df['coco_split'] == 'val2014']['multiple_choice_answer'])
-            
-        else:
-            assert "Invalid set parameter. Choose between: train, val, test"
-            
-            imgs_path = tf.data.Dataset.from_tensor_slices(df['image_id'].apply(lambda x: self.question_id2path(x, self.args_dict)))
-            
-            # Set `num_parallel_calls` so multiple images are loaded/processed in parallel.
-            d_img = imgs_path.map(lambda x: self.process_path(x, self.args_dict), num_parallel_calls=AUTOTUNE)
-            
-            tf_dataset = tf.data.Dataset.zip((d_img, d_question, d_answer)).shuffle(500).repeat().batch(self.args_dict.batch_size)
-            
-        return tf_dataset
+        # choose train or test dataset
+        if self.dataset == 'vqacp_v2':
+            if self.set == 'train':
+                df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_annotations.json'))
+                df_quest = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_questions.json'))
 
-    def question_id2path(self, img_id):
-        img_id = str(img_id)
-        full_number = ''.join((12 - len(img_id)) * ['0']) + img_id
-        if self.args_dict.mode == 'train' or 'val':
-            return os.path.join(self.args_dict.dir_data, "train2014/COCO_train2014_" + full_number + ".jpg")
-        else:
-            return os.path.join(self.args_dict.dir_data, "val2014/COCO_val2014_" + full_number + ".jpg")
+            elif self.set == 'test':
+                df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_test_annotations.json'))
+                df_quest = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_test_questions.json'))
+                
+        elif self.dataset == 'vqa_v2':
+            if self.set == 'train':
+                df_annot = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_mscoco_train2014_annotations.json')))
+                df_quest = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_train2014_questions.json')))
+
+            elif self.set == 'test':
+                df_annot = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_mscoco_val2014_annotations.json')))
+                df_quest = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_val2014_questions.json')))
+
+            elif self.set == 'test-dev':
+                df_annot = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_mscoco_val2014_annotations.json')))
+                df_quest = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_test-dev2015_questions.json')))
+                
+            df_annot = pd.DataFrame(df_annot['annotations'])
+            df_quest = pd.DataFrame(df_quest['questions'])
+                
+
+        #df = pd.merge(df_annot[['question_type', 'multiple_choice_answer',
+        #                        'image_id', 'answer_type', 'question_id']]
+        #              , df_quest[['coco_split', 'question', 'question_id']], on='question_id')
+        df = pd.merge(df_annot[['multiple_choice_answer',
+                                'image_id', 'answer_type', 'question_id']]
+                      , df_quest[['question', 'question_id']], on='question_id')
         
-    def decode_img(img):
-        # convert the compressed string to a 3D uint8 tensor
-        img = tf.image.decode_jpeg(img, channels=3)
-        # Use `convert_image_dtype` to convert to floats in the [0,1] range.
-        img = tf.image.convert_image_dtype(img, tf.float32)
-        # resize the image to the desired size.
-        return tf.image.resize(img, [self.args_dict.IMG_WIDTH, self.args_dict.IMG_HEIGHT])
+        df = df[(df['multiple_choice_answer'].isin(top_3000_answer)) & 
+                (df['answer_type'].isin(self.answer_type))]
+        
 
-    def process_path(self, file_path):
-        # load the raw data from module import symbol
-        the file as a string
-        img = tf.io.read_file(file_path)
-        img = self.decode_img(img, self.args_dict)
-        return img
+        #self.images_path = df.apply(lambda x: self.get_img_path(x), axis=1)
+        self.questions = df['question']
+        self.answers = df['answer_type']
+        self.img_embeddings_path = df['image_id'].apply(lambda x: self.get_visual_features_path(x))
 
-    def get_visual_features(self, image_id):
+    def __len__(self):
+        return len(self.questions)
+    
+    def get_visual_features_path(self, image_id):
         """
-        Gets the visual features of the image of the corresponding image id
+        Returns the right path of the features of the image based on the question_id
 
         Parameters
         ----------
-        image_id : int
-            The id of the image to fetch the features for
+        image_id : string
+            The id of the corresponding image
+
+        Returns
+        -------
+        path to the corresponding feature of the image
+        """
+        return os.path.join(self.trainval_features_path, str(image_id))
+        
+
+    def get_visual_features(self, filepath):
+        """
+        Returns the visual features of the image of the corresponding filepath
+
+        Parameters
+        ----------
+        filepath : string
+            The path of the respective image
 
         Returns
         -------
         A dictionary containing all the features of the image.
         """
-        filepath = os.path.join(self.trainval_features_path, str(image_id))
 
         with open(filepath + ".pkl", "rb") as handle:
             out = pickle.load(handle, encoding="ascii")
@@ -122,4 +127,65 @@ class DataLoader:
         out["boxes"] = features["arr_1"]
 
         return out
+
+    def get_img_path(self, row):
+        """
+        Returns the right path based on the question_id and coco_split
+
+        Parameters
+        ----------
+        row : row of DataFrame
+            row with all atributes of que dataset
+
+        Returns
+        -------
+        path to the corresponding image
+        """
+        img_id = str(row['image_id'])
+        img_folder = row['coco_split']
+        full_number = ''.join((12 - len(img_id)) * ['0']) + img_id
+        return os.path.join(self.dir_data, img_folder, "COCO_" + img_folder + "_" + full_number + ".jpg")
     
+    def preprocess_sentence(self, sentence):
+        """
+        returns the preprocessed question
+
+        Parameters
+        ----------
+        question : string
+            question to be preprocessed
+
+        Returns
+        -------
+        question preprocessed
+        """
+        prep_quest = sentence.translate(str.maketrans('', '', string.punctuation)) # remove punctuation
+        prep_quest = sentence.lower() # lower case
+    
+        return prep_quest
+
+    def __getitem__(self, index):
+        """Returns data sample as a dict with keys: img_embed, question, answer"""
+
+        # Load image & apply transformation (we only use the pre-calc embbeding)
+        # image = Image.open(self.images_path[index]).convert('RGB')
+        # if self.transform is not None:
+        #    image = self.transform(image)
+
+        # Image embedding
+        img_embedding = self.get_visual_features(self.img_embeddings_path.iloc[index])
+
+        # Question
+        question = self.preprocess_sentence(self.questions.iloc[index])
+
+        # Answer
+        answer = self.preprocess_sentence(self.answers.iloc[index])
+        
+        item = {
+            'img_embed': img_embedding,
+            #'image': image,
+            'question': question,
+            'answer': answer
+        }
+
+        return item

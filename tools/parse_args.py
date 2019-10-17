@@ -39,6 +39,8 @@ def parse_arguments():
                         importance of the RUBi and question-only loss. ")
     parser.add_argument("--fp16", action="store_true",
                         help="Whether to use FP16 or FP32 in training.")
+    parser.add_argument("--opt-level", dest="opt_level", type=str, default="O1",
+                        help="Which optimisation to use for mixed precision training.")
     parser.add_argument("--rubi", action="store_true",
                         help="Use RUBi question-only branch during training.")
 

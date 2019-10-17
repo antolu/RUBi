@@ -1,10 +1,12 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-from tensorflow.keras.layers import Dense, Layer
-from tensorflow.keras import Sequential
+from collections import OrderedDict
+
+import torch
+import torch.nn as nn
 
 
-class MLP(Layer):
+class MLP(nn.Module):
     """
     Multi-Layer Perceptron block
     
@@ -17,11 +19,15 @@ class MLP(Layer):
         super().__init__()
 
         dimensions.insert(0, input_dim)
-        self.mlp = Sequential()
 
+        layers = []
         for lyr in range(len(dimensions) - 1):
-            self.mlp.add(Dense(dimensions(lyr+1), activation=activation,
-                               input_dim=(dimensions(lyr))))
+            layers.append(("linear" + str(lyr + 1),
+                           nn.Linear(dimensions[lyr], dimensions[lyr+1])))
+            if activation != "none":
+                layers.append(("relu" + str(lyr + 1), nn.ReLU()))
 
-    def call(self, inputs):
+        self.mlp = nn.Sequential(OrderedDict(layers))
+
+    def forward(self, inputs):
         return self.mlp(inputs)
