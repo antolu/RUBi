@@ -14,8 +14,8 @@ from utilities.earlystopping import EarlyStopping
 from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 from utilities.schedule_lr import LrScheduler
+from dataloader import DataLoaderVQA
 
-<<<<<<< HEAD
 def compute_acc(labels, predictions):
     """
     predictions: output of a forward pass through the model
@@ -25,10 +25,6 @@ def compute_acc(labels, predictions):
     correct = (predictions == labels).float().sum()
     acc = correct/output.shape[0]
     return acc
-
-=======
-from dataloader import DataLoaderVQA
->>>>>>> e8928806c1ab097b3a84cbd2a0d24e5c59e0d695
 
 args = parse_arguments()
 
