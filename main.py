@@ -4,6 +4,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import torch
 import torch.optim as optim
+import torch.utils.data as data
 
 from models.rubi.baseline_net import BaselineNet
 from models.rubi.rubi import RUBi
@@ -14,6 +15,7 @@ from datetime import datetime
 from torch.utils.tensorboard import SummaryWriter
 from utilities.schedule_lr import LrScheduler
 
+<<<<<<< HEAD
 def compute_acc(labels, predictions):
     """
     predictions: output of a forward pass through the model
@@ -24,6 +26,9 @@ def compute_acc(labels, predictions):
     acc = correct/output.shape[0]
     return acc
 
+=======
+from dataloader import DataLoaderVQA
+>>>>>>> e8928806c1ab097b3a84cbd2a0d24e5c59e0d695
 
 args = parse_arguments()
 
@@ -51,8 +56,7 @@ if args.pretrained_model:
     pretrained_model = torch.load(args.pretrained_model, map_device=device)
     model.load_state_dict(pretrained_model["model"])
 
-# TODO: read in datasets
-dataloader = None
+dataloader = data.DataLoader(DataLoaderVQA(args))
 
 if args.train:
     # tensorboard Writer will output to /runs directory
@@ -73,7 +77,7 @@ if args.train:
 
     # use FP16
     if args.fp16:
-        import amp
+        import apex.amp as amp
         model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
 
     if args.pretrained_model:
