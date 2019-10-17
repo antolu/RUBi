@@ -2,7 +2,7 @@
 #
 # Speedy script to install Docker and Nvidia-Docker
 # and deploy the RUBi code inside a PyTorch
-# Docker container. 
+# Docker container.
 #
 # ........................................................
 
@@ -125,6 +125,10 @@ parseArguments() {
                 GCLOUD=gcloud
                 shift
             ;;
+            --datasets)
+                DATASETS=True
+                shift
+            ;;
             *)    # unknown option
                 POSITIONAL+=("$1") # save it in an array for later
                 shift # past argument
@@ -205,18 +209,37 @@ getVQADataset() {
     unzip test2014.zip
     rm -f test2014.zip
 
-#    echo "Getting VQA v2"
-#    axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Train_mscoco.zip
-#    axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Train_mscoco.zip
-#    axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Test_mscoco.zip
+    echo "Getting VQA v2"
+    mkdir vqa_v2
+    cd vqa_v2
+    axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Train_mscoco.zip
+    axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Train_mscoco.zip
+    axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Val_mscoco.zip
+    axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Val_mscoco.zip
+    axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Test_mscoco.zip
+
+    cd ..
+
+    unzip v2_Annotations_Train_mscoco.zip
+    rm -f v2_Annotations_Train_mscoco.zip
+    unzip v2_Questions_Train_mscoco.zip
+    rm -f v2_Questions_Train_mscoco.zip
+    unzip v2_Annotations_Val_mscoco.zip
+    rm -f v2_Annotations_Val_mscoco.zip
+    unzip v2_Questions_Val_mscoco.zip
+    rm -f v2_Questions_Val_mscoco.zip
+    unzip v2_Questions_Test_mscoco.zip
+    rm -f v2_Questions_Test_mscoco.zip
 
     echo "Getting VQA-CP v2"
+    mkdir -p vqacp_v2
+    cd vqacp_v2
     axel -qn20 https://computing.ece.vt.edu/~aish/vqacp/vqacp_v2_train_annotations.json
     axel -qn20 https://computing.ece.vt.edu/~aish/vqacp/vqacp_v2_train_questions.json
     axel -qn20 https://computing.ece.vt.edu/~aish/vqacp/vqacp_v2_test_annotations.json
     axel -qn20 https://computing.ece.vt.edu/~aish/vqacp/vqacp_v2_test_questions.json
 
-    cd ..
+    cd ../..
 }
 
 
@@ -342,7 +365,10 @@ deploy() {
         checkDockerPermissions
         buildPyTorchImage
 
-        getVisualFeatures
+        if [[ ! -z $DATASETS ]]; then
+            getVisualFeatures
+            getVQADataset
+        fi
 
         checkDockerPermissions
 
