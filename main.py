@@ -11,6 +11,7 @@ from models.rubi.loss import RUBiLoss, BaselineLoss
 from tools.parse_args import parse_arguments
 from utilities.earlystopping import EarlyStopping
 from datetime import datetime
+from torch.utils.tensorboard import SummaryWriter
 
 
 args = parse_arguments()
@@ -43,6 +44,11 @@ if args.pretrained_model:
 dataloader = None
 
 if args.train:
+    # tensorboard Writer will output to /runs directory
+    tensorboard_writer = SummaryWriter(filename_suffix='train')
+    losses = []
+    accs = []
+
     model.train()
 
     # Initialize parameters in network
@@ -75,6 +81,7 @@ if args.train:
                 model.zero_grad()
                 predictions = model(inputs)
                 current_loss = loss(inputs["answers"], predictions)
+                losses.append(current_loss)
 
                 if args.fp16:
                     with amp.scale_loss(current_loss, optimizer) as scaled_loss:
@@ -104,6 +111,19 @@ if args.train:
         filename = args.model + "_epoch_{}_dataset_{}_{}.pt".format(epoch, args.dataset, datetime.now().strftime("%Y%m%d%H%M%S"))
         torch.save(checkpoint, filename)
 
-    # implement tensorboard
+    # Visualize train and test loss and accuracy graphs in tensorboard
+    for n_iter in range(len(losses)):
+        writer.add_scalar('Loss/train', losses[n_iter], n_iter)
+    #    writer.add_scalar('Accuracy/train', np.random.random(), n_iter)
+    tensorboard_writer.close()
+
 elif args.test:
     raise NotImplementedError()
+    # tensorboard_writer = SummaryWriter(filename_suffix='test')
+    # # Visualize train and test loss and accuracy graphs
+    # # tensorboard will group them together according to their name
+    # for n_iter in range(len(losses)):
+    #     writer.add_scalar('Loss/train', losses[n_iter], n_iter)
+    #     writer.add_scalar('Accuracy/train', np.random.random(), n_iter)
+    # tensorboard_writer.close()
+
