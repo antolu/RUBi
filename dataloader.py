@@ -1,5 +1,7 @@
 import os
 import pickle
+import string
+import json
 import numpy as np
 import torch
 import torch.utils.data as data
@@ -10,11 +12,8 @@ from PIL import Image
 
 class DataLoaderVQA(data.Dataset):
     def __init__(self, 
-                 # args_dict,
+                 args_dict,
                  set,
-                 transform= transforms.Compose([transforms.Resize(256),
-                                                transforms.CenterCrop(224), 
-                                                transforms.ToTensor()]),
                  dir_data='data',
                  coco_train_path="data/train2014",
                  coco_val_path="data/val2014",
@@ -22,59 +21,97 @@ class DataLoaderVQA(data.Dataset):
                  test_features_path="data/test2014_36"):
         """
         Args:
-            args_dic: parameters dictionar
+            args_dic: parameters dict
             set: 'train', 'val', 'test'
             transform: data transform
         """
 
-        # self.args_dict = args_dict
+        self.args_dict = args_dict
         self.set = set
-        self.transform = transform
         self.dir_data = dir_data
         self.coco_train_path = coco_train_path
         self.coco_val_path = coco_val_path
         self.trainval_features_path = trainval_features_path
         self.test_features_path = test_features_path
+        self.answer_type = args_dic.answer_type # list : ['yes/no', 'number', 'other']
+        self.dataset = args_dic.dataset  # vqacp_v2 | vqa_v2
+        # self.dataset = 'vqa_v2'
+        # self.answer_type = ['number']
 
-
-        df_annot = pd.read_json(os.path.join('data', 'vqacp_v2_train_annotations.json'))
-        #top_3000_answer = set(list(df_annot['multiple_choice_answer'].value_counts(3000).index))
+        # only use the top 3000 answers
+        df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_annotations.json'))
+        top_3000_answer = list(df_annot['multiple_choice_answer'].value_counts().index)[:3000]
     
-        if self.set == 'train':
-            df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2_train_annotations.json'))
-            df_quest = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2_train_questions.json'))
+        # choose train or test dataset
+        if self.dataset == 'vqacp_v2':
+            if self.set == 'train':
+                df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_annotations.json'))
+                df_quest = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_questions.json'))
 
-        elif self.set == 'test':
-            df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2_test_annotations.json'))
-            df_quest = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2_test_questions.json'))
+            elif self.set == 'test':
+                df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_test_annotations.json'))
+                df_quest = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_test_questions.json'))
+                
+        elif self.dataset == 'vqa_v2':
+            if self.set == 'train':
+                df_annot = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_mscoco_train2014_annotations.json')))
+                df_quest = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_train2014_questions.json')))
 
-        df = pd.merge(df_annot[['question_type', 'multiple_choice_answer',
+            elif self.set == 'test':
+                df_annot = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_mscoco_val2014_annotations.json')))
+                df_quest = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_val2014_questions.json')))
+
+            elif self.set == 'test-dev':
+                df_annot = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_mscoco_val2014_annotations.json')))
+                df_quest = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_test-dev2015_questions.json')))
+                
+            df_annot = pd.DataFrame(df_annot['annotations'])
+            df_quest = pd.DataFrame(df_quest['questions'])
+                
+
+        #df = pd.merge(df_annot[['question_type', 'multiple_choice_answer',
+        #                        'image_id', 'answer_type', 'question_id']]
+        #              , df_quest[['coco_split', 'question', 'question_id']], on='question_id')
+        df = pd.merge(df_annot[['multiple_choice_answer',
                                 'image_id', 'answer_type', 'question_id']]
-                      , df_quest[['coco_split', 'question', 'question_id']], on='question_id')
-        #df = df[df['answer_type'].isin(top_3000_answer)]
+                      , df_quest[['question', 'question_id']], on='question_id')
+        
+        df = df[(df['multiple_choice_answer'].isin(top_3000_answer)) & 
+                (df['answer_type'].isin(self.answer_type))]
+        
 
-        self.transform = transform
-
-        self.images_path = df.apply(lambda x: self.get_img_path(x), axis=1)
+        #self.images_path = df.apply(lambda x: self.get_img_path(x), axis=1)
         self.questions = df['question']
         self.answers = df['answer_type']
         self.img_embeddings_path = df['image_id'].apply(lambda x: self.get_visual_features_path(x))
 
     def __len__(self):
-        return len(self.images_path)
+        return len(self.questions)
     
     def get_visual_features_path(self, image_id):
+        """
+        Returns the right path of the features of the image based on the question_id
+
+        Parameters
+        ----------
+        image_id : string
+            The id of the corresponding image
+
+        Returns
+        -------
+        path to the corresponding feature of the image
+        """
         return os.path.join(self.trainval_features_path, str(image_id))
         
 
     def get_visual_features(self, filepath):
         """
-        Gets the visual features of the image of the corresponding image id
+        Returns the visual features of the image of the corresponding filepath
 
         Parameters
         ----------
-        image_id : int
-            The id of the image to fetch the features for
+        filepath : string
+            The path of the respective image
 
         Returns
         -------
@@ -92,27 +129,63 @@ class DataLoaderVQA(data.Dataset):
         return out
 
     def get_img_path(self, row):
-        """Returns the right path based on the question_id and coco_split"""
+        """
+        Returns the right path based on the question_id and coco_split
+
+        Parameters
+        ----------
+        row : row of DataFrame
+            row with all atributes of que dataset
+
+        Returns
+        -------
+        path to the corresponding image
+        """
         img_id = str(row['image_id'])
         img_folder = row['coco_split']
         full_number = ''.join((12 - len(img_id)) * ['0']) + img_id
         return os.path.join(self.dir_data, img_folder, "COCO_" + img_folder + "_" + full_number + ".jpg")
+    
+    def preprocess_sentence(self, sentence):
+        """
+        returns the preprocessed question
+
+        Parameters
+        ----------
+        question : string
+            question to be preprocessed
+
+        Returns
+        -------
+        question preprocessed
+        """
+        prep_quest = sentence.translate(str.maketrans('', '', string.punctuation)) # remove punctuation
+        prep_quest = sentence.lower() # lower case
+    
+        return prep_quest
 
     def __getitem__(self, index):
-        """Returns data sample as a tuple [image, embedding], [question, answer]"""
+        """Returns data sample as a dict with keys: img_embed, question, answer"""
 
-        # Load image & apply transformation
-        image = Image.open(self.images_path[index]).convert('RGB')
-        if self.transform is not None:
-            image = self.transform(image)
+        # Load image & apply transformation (we only use the pre-calc embbeding)
+        # image = Image.open(self.images_path[index]).convert('RGB')
+        # if self.transform is not None:
+        #    image = self.transform(image)
 
         # Image embedding
-        img_embedding = self.get_visual_features(self.img_embeddings_path[index])
+        img_embedding = self.get_visual_features(self.img_embeddings_path.iloc[index])
 
         # Question
-        question = self.questions[index]
+        question = self.preprocess_sentence(self.questions.iloc[index])
 
         # Answer
-        answer = self.answers[index]
+        answer = self.preprocess_sentence(self.answers.iloc[index])
+        
+        item = {
+            'img_embed': img_embedding,
+            #'image': image,
+            'question': question,
+            'answer': answer
+        }
 
-        return [image, img_embedding], [question, answer]
+        return item
