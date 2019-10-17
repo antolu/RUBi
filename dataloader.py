@@ -41,6 +41,7 @@ class DataLoaderVQA(data.Dataset):
         # only use the top 3000 answers
         df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_annotations.json'))
         top_3000_answer = list(df_annot['multiple_choice_answer'].value_counts().index)[:3000]
+        self.answ
     
         # choose train or test dataset
         if self.dataset == 'vqacp_v2':
