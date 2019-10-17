@@ -3,7 +3,7 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
 import torch
-import amp
+import torch.optim as optim
 
 from models.rubi.baseline_net import BaselineNet
 from models.rubi.rubi import RUBi
@@ -52,6 +52,7 @@ if args.train:
 
     # use FP16
     if args.fp16:
+        import amp
         model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
 
     if args.pretrained_model:
