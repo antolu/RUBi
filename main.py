@@ -118,12 +118,21 @@ if args.train:
     tensorboard_writer.close()
 
 elif args.test:
-    raise NotImplementedError()
-    # tensorboard_writer = SummaryWriter(filename_suffix='test')
-    # # Visualize train and test loss and accuracy graphs
-    # # tensorboard will group them together according to their name
-    # for n_iter in range(len(losses)):
-    #     writer.add_scalar('Loss/train', losses[n_iter], n_iter)
-    #     writer.add_scalar('Accuracy/train', np.random.random(), n_iter)
-    # tensorboard_writer.close()
+    # assume inputs is a dict
+    for key, value in dataloader:
+        value.to(device)
+
+    model.zero_grad()
+    predictions = model(inputs)
+    test_loss = loss(inputs["answers"], predictions)
+    test_acc = compute_acc(predictions, inputs['answers'])
+    losses.append(test_loss)
+    accs.append(test_acc)
+
+    tensorboard_writer = SummaryWriter(filename_suffix='test')
+    # Visualize train and test loss and accuracy graphs
+    for n_iter in range(len(losses)):
+        writer.add_scalar('Loss/test', losses[n_iter], n_iter)
+        writer.add_scalar('Accuracy/test', np.random.random(), n_iter)
+    tensorboard_writer.close()
 
