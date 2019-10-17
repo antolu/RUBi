@@ -4,6 +4,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 
 import torch
 import torch.optim as optim
+import torch.utils.data as data
 
 from models.rubi.baseline_net import BaselineNet
 from models.rubi.rubi import RUBi
@@ -13,6 +14,7 @@ from utilities.earlystopping import EarlyStopping
 from datetime import datetime
 from utilities.schedule_lr import LrScheduler
 
+from dataloader import DataLoaderVQA
 
 args = parse_arguments()
 
@@ -40,8 +42,7 @@ if args.pretrained_model:
     pretrained_model = torch.load(args.pretrained_model, map_device=device)
     model.load_state_dict(pretrained_model["model"])
 
-# TODO: read in datasets
-dataloader = None
+dataloader = data.DataLoader(DataLoaderVQA(args))
 
 if args.train:
     model.train()
@@ -57,7 +58,7 @@ if args.train:
 
     # use FP16
     if args.fp16:
-        import amp
+        import apex.amp as amp
         model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
 
     if args.pretrained_model:
