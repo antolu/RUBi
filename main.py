@@ -11,6 +11,7 @@ from models.rubi.loss import RUBiLoss, BaselineLoss
 from tools.parse_args import parse_arguments
 from utilities.earlystopping import EarlyStopping
 from datetime import datetime
+from utilities.schedule_lr import LrScheduler
 
 
 args = parse_arguments()
@@ -48,7 +49,11 @@ if args.train:
     # Initialize parameters in network
 
     optimizer = optim.Adamax(model.parameters(), lr=args.lr)
-    # TODO: implement a LR scheduler
+
+    if args.fp16:
+        scheduler = LrScheduler(optimizer.optimizer)
+    else:
+        scheduler = LrScheduler(optimizer)
 
     # use FP16
     if args.fp16:
@@ -83,6 +88,7 @@ if args.train:
                     current_loss.backward()
 
                 optimizer.step()
+                scheduler.step()
 
                 # early stopping if loss hasn't improved
                 if es.step(current_loss):
