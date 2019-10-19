@@ -7,6 +7,7 @@ import torch.optim as optim
 import torch.utils.data as data
 
 from models.rubi.baseline_net import BaselineNet
+from models.rubi.san_baseline import SanBaseline
 from models.rubi.rubi import RUBi
 from models.rubi.loss import RUBiLoss, BaselineLoss
 from tools.parse_args import parse_arguments
@@ -30,7 +31,7 @@ model = None
 if args.baseline == "rubi":
     model = BaselineNet(dir_st=args.dir_st, vocab=dataloader.get_vocab()).to(device)
 elif args.baseline == "san":
-    raise NotImplementedError()
+    model = SanBaseline(dir_st=args.dir_st, vocab=dataloader.get_vocab()).to(device)
 elif args.baseline == "updn":
     raise NotImplementedError()
 

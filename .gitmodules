@@ -1,0 +1,3 @@
+[submodule "rubi/san_pytorch"]
+	path = rubi/san_pytorch
+	url = https://github.com/clara2911/San-Pytorch.git

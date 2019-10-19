@@ -19,27 +19,27 @@ class BaselineNet(nn.Module):
 
     def forward(self, inputs):
         """
-        do full foward pass.
+        do full forward pass.
         ------
         Parameters
         inputs: item = dict with keys: 'img_embed', 'image', 'question', 'answer', 'answer_one_hot'
         
         """
 
-        # Imgage embedding (36 regions)
+        # Image embedding (36 regions)
         img_embedding = inputs['img_embed']
         
         print(inputs['quest_vocab_vec'])
 
         # embedding question
         question_embedding = inputs['quest_vocab_vec'].expand(img_embedding.size()[0], inputs['quest_vocab_vec'].size(0))
-        
+
         question_embedding = self.skip_thought(Variable(torch.LongTensor(question_embedding)))
         # question_embedding = question_embedding.expand(img_embedding.size()[0], question_embedding[0].size()[0]) 
 
-        # Block fusion        
-        block_out = [self.fusion_block([quest_e, img_e]) for quest_e,img_e in zip(question_embedding, img_embedding)] 
-        
+        # Block fusion: loop over the 36 regions in the image
+        block_out = [self.fusion_block([quest_e, img_e]) for quest_e,img_e in zip(question_embedding, img_embedding)]
+
         # MLP
         final_out = self.mlp(block_out)
         
@@ -47,4 +47,3 @@ class BaselineNet(nn.Module):
         # s ={'lo'}
         
         return final_out
-    
