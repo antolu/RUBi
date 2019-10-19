@@ -1,58 +1,50 @@
-from __future__ import absolute_import, division, print_function, unicode_literals
+import torch
+import torch.nn as nn
 
-from tensorflow.keras.layers import Dense, Layer
-from tensorflow.keras import Model, Sequential
+from torch.autograd import Variable
+
+from models.block import Block
+from models.skip_thoughts import BiSkip
 from models.mlp import MLP
 
-class BaselineNet(Model):
-    def __init__(self):
-        super().__init__()
+
+class BaselineNet(nn.Module):
+    def __init__(self, dir_st, vocab, img_emb_size=2048, text_emb_size=4800, mlp_dimensions = [2048, 3000]):
+        super(BaselineNet, self).__init__()
 
         # also initialise question and image encoder
-        self.fusion_block = BlockFusion(None)
-        
-
-    def call(self, inputs):
-
-        # full forward pass
-
-
-class BlockFusion(Layer):
-    def __init__(self, nv):
-        super().__init__()
-
-        mlp_dimensions = (2048, 2048, 3000)
+        self.skip_thought = BiSkip(dir_st, vocab)
+        self.fusion_block = Block([text_emb_size, img_emb_size], 2048, chunks=15, rank=15)
         self.mlp = MLP(2048, mlp_dimensions)
 
-        self.block = Block()
+    def forward(self, inputs):
+        """
+        do full foward pass.
+        ------
+        Parameters
+        inputs: item = dict with keys: 'img_embed', 'image', 'question', 'answer', 'answer_one_hot'
+        
+        """
 
-    def call(self, inputs):
+        # Imgage embedding (36 regions)
+        img_embedding = inputs['img_embed']
+        
+        print(inputs['quest_vocab_vec'])
 
-        x = self.block(inputs)
-        x = self.mlp(x)
+        # embedding question
+        question_embedding = inputs['quest_vocab_vec'].expand(img_embedding.size()[0], inputs['quest_vocab_vec'].size(0))
+        
+        question_embedding = self.skip_thought(Variable(torch.LongTensor(question_embedding)))
+        # question_embedding = question_embedding.expand(img_embedding.size()[0], question_embedding[0].size()[0]) 
 
-        out = {}
-        out["q_emb"] = inputs["q_emb"]
-        out["logits"] = None
-
-        return out
-
+        # Block fusion        
+        block_out = [self.fusion_block([quest_e, img_e]) for quest_e,img_e in zip(question_embedding, img_embedding)] 
+        
+        # MLP
+        final_out = self.mlp(block_out)
+        
+        #TODO: put answer in the format required by loss.py and rubi.py
+        # s ={'lo'}
+        
+        return final_out
     
-class Block(Layer):
-    def __init__(self,
-                 input_dims,
-                 output_dims,
-                 chunks=15,
-                 rank=15,
-                 projection_size=1000):
-        super().__init__()
-
-        self.input_dims = input_dims
-        self.output_dims = output_dims
-        self.chunks = chunks
-        self.rank = self.rank
-        self.projection_size = projection_size
-
-        self.linear1 = Dense(projection_size, activation="none", input_dim=input_dims)
-
-    def call(self, inputs):
