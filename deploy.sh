@@ -330,7 +330,7 @@ removePyTorchContainer() {
 #
 #............................................................
 runTFContainer() {
-    DOCKERARGS="-tid -p 8888:8888 --name tf-rubi -v $PWD:/home/RUBi"
+    DOCKERARGS="-tid -p 8888:8888 -p 6006:6006 --name tf-rubi -v $PWD:/home/RUBi"
     
     if [[ $GPU == "nvidia" ]]; then
         DOCKERARGS+=" --gpus all"
@@ -347,7 +347,7 @@ runTFContainer() {
 #
 #............................................................
 runPyTorchContainer() {
-    DOCKERARGS="-tid -p 8888:8888 --name pytorch-rubi -v $PWD:/home/RUBi"
+    DOCKERARGS="-tid -p 8888:8888 -p 6006:6006 --name pytorch-rubi -v $PWD:/home/RUBi"
     
     $SUDO docker run $DOCKERARGS pytorch-rubi:latest
 }

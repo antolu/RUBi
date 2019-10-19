@@ -1,8 +1,10 @@
 from __future__ import absolute_import, division, print_function, unicode_literals
 
-from tensorflow.keras.layers import Dense, Layer
-from tensorflow.keras import Model, Sequential
+import torch
+import torch.nn as nn
 from models.mlp import MLP
+from models.skip_thoughts import BiSkip
+from collections import OrderedDict
 
 class BaselineNet(Model):
     def __init__(self):
@@ -17,42 +19,62 @@ class BaselineNet(Model):
         # full forward pass
 
 
-class BlockFusion(Layer):
-    def __init__(self, nv):
-        super().__init__()
+class QuestionEncoder(nn.Module) :
+    """
+    The question encoder
 
-        mlp_dimensions = (2048, 2048, 3000)
-        self.mlp = MLP(2048, mlp_dimensions)
+    Parameters:
+    -----------
+     - dir_st: str
+        The directory containing the skip thought data files
+     - vocab: list
+        A list of words to initialise the text encoder with
+    """
+    def __init__(self, dir_st, vocab):
 
-        self.block = Block()
+        self.text_encoder = BiSkip(dir_st, vocab)
 
-    def call(self, inputs):
+        self.attn_extractor = nn.Sequential(OrderedDict([
+            ("lin1", nn.Linear(2400, 512)),
+            ("relu", nn.ReLU()),
+            ("lin2", nn.Linear(512, 2)),
+            ("mask_softmax", SoftMaxMask())
+        ]))
 
-        x = self.block(inputs)
-        x = self.mlp(x)
+    def forward(self, inputs):
 
-        out = {}
-        out["q_emb"] = inputs["q_emb"]
-        out["logits"] = None
+        q_emb = self.question_encoder(inputs)
 
-        return out
+        attns = self.attn_extractor(q_emb)
 
-    
-class Block(Layer):
-    def __init__(self,
-                 input_dims,
-                 output_dims,
-                 chunks=15,
-                 rank=15,
-                 projection_size=1000):
-        super().__init__()
+        attns_res = []
+        for attn in torch.unbind(attns, dim=2):
+            attn = attn.unsqueeze(dim=2).expand_as(q_emb)
 
-        self.input_dims = input_dims
-        self.output_dims = output_dims
-        self.chunks = chunks
-        self.rank = self.rank
-        self.projection_size = projection_size
+            q_with_attn = attn * q_emb
+            attns_res.append(q_with_attn.sum(dim=1))
 
-        self.linear1 = Dense(projection_size, activation="none", input_dim=input_dims)
+        q_emb_with_attn = torch.cat(attns_res, dim=1)
 
-    def call(self, inputs):
+        return q_emb_with_attn
+
+
+
+class SoftMaxMask(nn.Module):
+    """
+    Computes the masked Softmax
+
+    Borrowed from Qiao Jin @ https://discuss.pytorch.org/t/apply-mask-softmax/14212/14
+    """
+    def __init__(self, dim=1, epsilon=1e-5):
+        self.dim = dim
+        self.epsilon = epsilon
+
+    def forward(self, inputs):
+        max_val = torch.max(inputs, dim=self.dim, keepdim=True)[0] # increases numerical stability
+        numerator = torch.exp(inputs - max_val)
+        numerator = numerator * (inputs == 0).float()  # this step masks
+
+        denominator = torch.sum(numerator, dim=self.dim, keepdim=True) + self.epsilon
+
+        return numerator / denominator
