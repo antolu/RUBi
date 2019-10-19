@@ -5,9 +5,11 @@ def parse_arguments():
     parser = ArgumentParser()
 
     # Arguments concerning the environment of the repository
-    parser.add_argument("-d", "--dataset", type=str, default="vqa-v2-cp",
+    parser.add_argument("-d", "--dataset", type=str, default="vqa-v2-cp", choices=['vqa-v2-cp', 'vqa-v2'],
                         help="The dataset to train/test on. (vqa-v2-cp | vqa-v2)")
     parser.add_argument("--datadir", type=str, default="data",
+                        help="Path to the root directory containing the datasets.")
+    parser.add_argument("--dir_st", type=str, default="data/skip_thoughts",
                         help="Path to the root directory containing the datasets.")
     parser.add_argument('--dir_images', type=str, default='images',
                         help="Path to the root directory containing the image datasets")
@@ -15,7 +17,8 @@ def parse_arguments():
                         help="Path to the root directory containing the other data")
     parser.add_argument('--dir_model', default='Models/',
                         help='Path to project data')
-
+    parser.add_argument('--pretrained-model', dest='pretrained_model', default=None,
+                        help='path to pretrained-model')
     parser.add_argument('--answer-type', default='number', type=str, dest="answer_type",
                         choices=["all", "number", "yes-no", "other"], help='answer type (all | number | yes-no | other)')
 
@@ -64,7 +67,7 @@ def parse_arguments():
                         help="The height of the input images to the network")
 
     # Other arguments
-    parser.add_argument("baseline", type=str, choices=["rubi", "san", "updn"],
+    parser.add_argument("baseline", type=str, default='rubi', choices=["rubi", "san", "updn"],
                         help="Valid baseline net: rubi, san, updn.")
 
     args = parser.parse_args()

@@ -1,6 +1,6 @@
 import os
 import pickle
-import string
+import re
 import json
 import numpy as np
 import torch
@@ -8,10 +8,12 @@ import torch.utils.data as data
 import pandas as pd
 import torchvision.transforms as transforms
 
+from sklearn.feature_extraction.text import CountVectorizer
 from PIL import Image
 
+
 class DataLoaderVQA(data.Dataset):
-    def __init__(self, 
+    def __init__(self,
                  args_dict,
                  dir_data='data',
                  coco_train_path="data/train2014",
@@ -31,8 +33,14 @@ class DataLoaderVQA(data.Dataset):
         self.coco_val_path = coco_val_path
         self.trainval_features_path = trainval_features_path
         self.test_features_path = test_features_path
-        self.answer_type = args_dict.answer_type # list : ['yes/no', 'number', 'other']
         self.dataset = args_dict.dataset  # vqacp_v2 | vqa_v2
+        self.vocab = []  # vocab related with the dataset questions
+        
+        if args_dict.answer_type == 'all':
+            self.answer_type = ['yes/no', 'number', 'other']
+        else:
+            self.answer_type = [args_dict.answer_type]
+        
 
         # only use the top 3000 answers
         df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_annotations.json'))
@@ -40,9 +48,9 @@ class DataLoaderVQA(data.Dataset):
         self.answer2idx = {}
         for idx, answer in enumerate(top_3000_answer):
             self.answer2idx[answer] = idx
-    
+
         # choose train or test dataset
-        if self.dataset == 'vqacp_v2':
+        if self.dataset == 'vqa-v2-cp':
             if args_dict.train:
                 df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_annotations.json'))
                 df_quest = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_questions.json'))
@@ -50,38 +58,71 @@ class DataLoaderVQA(data.Dataset):
             elif args_dict.test:
                 df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_test_annotations.json'))
                 df_quest = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_test_questions.json'))
-                
-        elif self.dataset == 'vqa_v2':
+
+        elif self.dataset == 'vqa-v2':
             if args_dict.train:
-                df_annot = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_mscoco_train2014_annotations.json')))
-                df_quest = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_train2014_questions.json')))
+                df_annot = json.load(
+                    open(os.path.join(self.dir_data, 'vqa_v2', 'v2_mscoco_train2014_annotations.json')))
+                df_quest = json.load(
+                    open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_train2014_questions.json')))
 
             elif args_dict.test:
                 df_annot = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_mscoco_val2014_annotations.json')))
-                df_quest = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_val2014_questions.json')))
+                df_quest = json.load(
+                    open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_val2014_questions.json')))
 
             elif args_dict.test_dev:
                 df_annot = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_mscoco_val2014_annotations.json')))
-                df_quest = json.load(open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_test-dev2015_questions.json')))
-                
+                df_quest = json.load(
+                    open(os.path.join(self.dir_data, 'vqa_v2', 'v2_OpenEnded_mscoco_test-dev2015_questions.json')))
+
             df_annot = pd.DataFrame(df_annot['annotations'])
             df_quest = pd.DataFrame(df_quest['questions'])
 
         df = pd.merge(df_annot[['question_type', 'multiple_choice_answer',
-                                'image_id', 'answer_type', 'question_id']], 
-				df_quest[['coco_split', 'question', 'question_id']], on='question_id')
-        
-        df = df[(df['multiple_choice_answer'].isin(top_3000_answer)) & 
+                                'image_id', 'answer_type', 'question_id']],
+                      df_quest[['coco_split', 'question', 'question_id']], on='question_id')
+
+        df = df[(df['multiple_choice_answer'].isin(top_3000_answer)) &
                 (df['answer_type'].isin(self.answer_type))]
-        
-	#self.images_path = df.apply(lambda x: self.get_img_path(x), axis=1)
-        self.questions = df['question']
-        self.answers = df['answer_type']
+
+        # self.images_path = df.apply(lambda x: self.get_img_path(x), axis=1)
+        self.questions = df['question'].apply(self.preprocess_sentence)
+        self.vocab = self.get_vocab()
+        self.vocab2id = self.get_vocab2id()
+        self.answers = df['multiple_choice_answer'].apply(self.preprocess_sentence)
         self.img_embeddings_path = df['image_id'].apply(lambda x: self.get_visual_features_path(x))
 
     def __len__(self):
         return len(self.questions)
-    
+
+    def get_vocab2id(self):
+        """
+        Parameters
+        ----------
+
+        Returns
+        -------
+        a dict that links each word from vocab to a unique id
+        """
+        vocab2id = {}
+        for pos, word in enumerate(self.vocab):
+            vocab2id[word] = pos
+        return vocab2id
+        
+    def get_vocab(self):
+        """
+        Parameters
+        ----------
+
+        Returns
+        -------
+        a list containing all the words present in the questions
+        """
+        word_vectorizer = CountVectorizer(ngram_range=(1, 2), analyzer='word')
+        sparse_matrix = word_vectorizer.fit_transform(self.questions)
+        return word_vectorizer.get_feature_names()
+
     def get_img_path(self, row):
         """
         Returns the right path based on the question_id and coco_split
@@ -99,7 +140,7 @@ class DataLoaderVQA(data.Dataset):
         img_folder = row['coco_split']
         full_number = ''.join((12 - len(img_id)) * ['0']) + img_id
         return os.path.join(self.dir_data, img_folder, "COCO_" + img_folder + "_" + full_number + ".jpg")
-    
+
     def get_visual_features_path(self, image_id):
         """
         Returns the right path of the features of the image based on the question_id
@@ -114,7 +155,6 @@ class DataLoaderVQA(data.Dataset):
         path to the corresponding feature of the image
         """
         return os.path.join(self.trainval_features_path, str(image_id))
-        
 
     def get_visual_features(self, filepath):
         """
@@ -135,8 +175,8 @@ class DataLoaderVQA(data.Dataset):
 
         features = np.load(filepath + ".npz")
 
-        out["features"] = features["arr_0"]
-        out["boxes"] = features["arr_1"]
+        out["features"] = torch.tensor(features["arr_0"])
+        out["boxes"] = torch.tensor(features["arr_1"])
 
         return out
 
@@ -157,7 +197,7 @@ class DataLoaderVQA(data.Dataset):
         img_folder = row['coco_split']
         full_number = ''.join((12 - len(img_id)) * ['0']) + img_id
         return os.path.join(self.dir_data, img_folder, "COCO_" + img_folder + "_" + full_number + ".jpg")
-    
+
     def preprocess_sentence(self, sentence):
         """
         returns the preprocessed question
@@ -171,9 +211,9 @@ class DataLoaderVQA(data.Dataset):
         -------
         question preprocessed
         """
-        prep_quest = sentence.translate(str.maketrans('', '', string.punctuation)) # remove punctuation
-        prep_quest = sentence.lower() # lower case
-    
+        prep_quest = re.sub(r'[^\w\s]','', sentence)  # remove punctuation
+        prep_quest = prep_quest.lower()  # lower case
+
         return prep_quest
 
     def __getitem__(self, index):
@@ -183,22 +223,34 @@ class DataLoaderVQA(data.Dataset):
         # image = Image.open(self.images_path[index]).convert('RGB')
         # if self.transform is not None:
         #    image = self.transform(image)
-
+        
+        MAX_WORDS_QUESTION = 30
+        
         # Image embedding
-        img_embedding = self.get_visual_features(self.img_embeddings_path.iloc[index])
+        img_embedding = self.get_visual_features(self.img_embeddings_path.iloc[index])['features']
 
         # Question
-        question = self.preprocess_sentence(self.questions.iloc[index])
+        question = self.questions.iloc[index]
+        question_words = question.split()
+        n_words = len(question_words)
+        quest_vocab_vec = torch.zeros(MAX_WORDS_QUESTION)  # vector used for feeding the quest encoder
+        for i, word in enumerate(question_words):
+            if i >= MAX_WORDS_QUESTION:
+                break
+            quest_vocab_vec[i] = self.vocab2id[word]
 
         # Answer
-        answer = self.preprocess_sentence(self.answers.iloc[index])
-        answer_one_hot = torch.zeros(3000)
+        answer = self.answers.iloc[index]
+        answer_one_hot = torch.zeros(3000)  # vector used for the loss
         answer_one_hot[self.answer2idx[answer]] = 1.0
+        
+        # item returned from the dataset
         item = {
             'img_embed': img_embedding,
-            #'image': image,
-            'question': question,
-            'answer': answer,
+            # 'image': image,
+            # 'question': question,
+            'quest_vocab_vec': quest_vocab_vec.type(torch.LongTensor),
+            # 'answer': answer,
             'answer_one_hot': answer_one_hot
         }
 

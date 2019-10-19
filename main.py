@@ -7,6 +7,7 @@ import torch.optim as optim
 import torch.utils.data as data
 
 from models.rubi.baseline_net import BaselineNet
+from models.rubi.san_baseline import SanBaseline
 from models.rubi.rubi import RUBi
 from models.rubi.loss import RUBiLoss, BaselineLoss
 from tools.parse_args import parse_arguments
@@ -21,14 +22,16 @@ args = parse_arguments()
 
 # Check if GPU can be used, else use CPU
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print("Using device {device}.")
+print("Using device {}.".format(device))
+
+# dataloader = data.DataLoader(DataLoaderVQA(args))
+dataloader = DataLoaderVQA(args)
 
 model = None
-if args.baseline == "baseline":
-    model = BaselineNet().to(device)
-    raise NotImplementedError()
+if args.baseline == "rubi":
+    model = BaselineNet(dir_st=args.dir_st, vocab=dataloader.get_vocab()).to(device)
 elif args.baseline == "san":
-    raise NotImplementedError()
+    model = SanBaseline(dir_st=args.dir_st, vocab=dataloader.get_vocab()).to(device)
 elif args.baseline == "updn":
     raise NotImplementedError()
 
@@ -42,8 +45,6 @@ else:
 if args.pretrained_model:
     pretrained_model = torch.load(args.pretrained_model, map_device=device)
     model.load_state_dict(pretrained_model["model"])
-
-dataloader = data.DataLoader(DataLoaderVQA(args))
 
 if args.train:
     # tensorboard Writer will output to /runs directory
@@ -81,7 +82,7 @@ if args.train:
 
             # assume inputs is a dict
             for i_batch, inputs in enumerate(dataloader):
-                for key, value in inputs:
+                for key, value in inputs.items():
                     value.to(device)
 
                 model.zero_grad()
@@ -115,7 +116,9 @@ if args.train:
         if args.fp16:
             checkpoint['amp'] = amp.state_dict()
 
-        filename = args.model + "_epoch_{}_dataset_{}_{}.pt".format(epoch, args.dataset, datetime.now().strftime("%Y%m%d%H%M%S"))
+        filename = args.baseline + "_epoch_{}_dataset_{}_{}_{}.pt".format(epoch, args.dataset,
+                                                                          args.answer_type,
+                                                                          datetime.now().strftime("%Y%m%d%H%M%S"))
         torch.save(checkpoint, filename)
 
     # Visualize train and test loss and accuracy graphs in tensorboard
@@ -129,8 +132,8 @@ elif args.test:
     # tensorboard_writer = SummaryWriter(filename_suffix='test')
     # # Visualize train and test loss and accuracy graphs
     # # tensorboard will group them together according to their name
+    # # tensorboard will group them together according to their name
     # for n_iter in range(len(losses)):
     #     writer.add_scalar('Loss/train', losses[n_iter], n_iter)
     #     writer.add_scalar('Accuracy/train', np.random.random(), n_iter)
     # tensorboard_writer.close()
-
