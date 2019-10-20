@@ -23,12 +23,13 @@ args = parse_arguments()
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("Using device {}.".format(device))
 
-# dataloader = data.DataLoader(DataLoaderVQA(args))
-dataloader = DataLoaderVQA(args)
+dataset = DataLoaderVQA(args)
+dataloader = data.DataLoader(dataset, batch_size=args.batchsize, num_workers=args.workers)
+#dataloader = DataLoaderVQA(args)
 
 model = None
 if args.baseline == "rubi":
-    model = BaselineNet(dir_st=args.dir_st, vocab=dataloader.get_vocab()).to(device)
+    model = BaselineNet(dir_st=args.dir_st, vocab=dataset.get_vocab()).to(device)
 elif args.baseline == "san":
     raise NotImplementedError()
 elif args.baseline == "updn":

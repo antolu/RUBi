@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.autograd import Variable
 from models.mlp import MLP
 from models.skip_thoughts import BiSkip
+from models.block import Block
 from collections import OrderedDict
 
 class BaselineNet(nn.Module):
@@ -10,7 +11,7 @@ class BaselineNet(nn.Module):
         super(BaselineNet, self).__init__()
 
         # also initialise question and image encoder
-        self.skip_thought = BiSkip(dir_st, vocab)
+        self.skip_thought = QuestionEncoder(dir_st, vocab)
         self.fusion_block = Block([text_emb_size, img_emb_size], 2048, chunks=15, rank=15)
         self.mlp = MLP(2048, mlp_dimensions)
 
@@ -19,26 +20,38 @@ class BaselineNet(nn.Module):
         do full foward pass.
         ------
         Parameters
-        inputs: item = dict with keys: 'img_embed', 'image', 'question', 'answer', 'answer_one_hot'
+        inputs: item = dict with keys: 'img_embed', 'image', ''quest_vocab_vec'', 'answer_one_hot'
         
         """
+        b_size = inputs['quest_vocab_vec'].size(0)
+        quest_size = inputs['quest_vocab_vec'].size(1)
+        n_regions = inputs['img_embed'].size(1)
 
-        # Imgage embedding (36 regions)
+
+        # Image embedding (36 regions)
         img_embedding = inputs['img_embed']
-        
-        print(inputs['quest_vocab_vec'])
+        #print("------------------------")
+        #print("inputs['quest_vocab_vec']", inputs['quest_vocab_vec'].size())
+        #print("b_size", b_size)
+        #print("img_embedding", img_embedding.size())
+        #print("------------------------")
+
 
         # embedding question
-        question_embedding = inputs['quest_vocab_vec'].expand(img_embedding.size()[0], inputs['quest_vocab_vec'].size(0))
-        
+        # question_embedding = inputs['quest_vocab_vec'].expand(b_size, img_embedding.size()[1], inputs['quest_vocab_vec'].size()[1])
+        question_embedding = inputs['quest_vocab_vec'].repeat(1, n_regions).view(b_size, n_regions*quest_size)
+        print("quest repeated")
         question_embedding = self.skip_thought(Variable(torch.LongTensor(question_embedding)))
+        print("quest embeded")
         # question_embedding = question_embedding.expand(img_embedding.size()[0], question_embedding[0].size()[0]) 
 
-        # Block fusion        
+        # Block fusion 
+        print("start block fusion")
         block_out = [self.fusion_block([quest_e, img_e]) for quest_e,img_e in zip(question_embedding, img_embedding)] 
-        
+        print("fusion block done")
         # MLP
         final_out = self.mlp(block_out)
+        print("MLP done")
         
         #TODO: put answer in the format required by loss.py and rubi.py
         # s ={'lo'}
@@ -58,24 +71,31 @@ class QuestionEncoder(nn.Module) :
         A list of words to initialise the text encoder with
     """
     def __init__(self, dir_st, vocab):
-
+        super().__init__()
         self.text_encoder = BiSkip(dir_st, vocab)
 
         self.attn_extractor = nn.Sequential(OrderedDict([
             ("lin1", nn.Linear(2400, 512)),
             ("relu", nn.ReLU()),
-            ("lin2", nn.Linear(512, 2)),
-            ("mask_softmax", SoftMaxMask())
+            ("lin2", nn.Linear(512, 2))#,
+            #("mask_softmax", SoftMaxMask())
         ]))
 
     def forward(self, inputs):
 
-        q_emb = self.question_encoder(inputs)
+        q_emb = self.text_encoder(inputs)
 
         attns = self.attn_extractor(q_emb)
 
+        print("---------------------")
+        print("inputs: ", inputs)
+        print("---------------------")
+        print("q_emb: ", q_emb)
+        print("---------------------")
+        print("attns: ", attns)
+        print("attns size: ", attns.size())
         attns_res = []
-        for attn in torch.unbind(attns, dim=2):
+        for attn in torch.unbind(attns, dim=1):
             attn = attn.unsqueeze(dim=2).expand_as(q_emb)
 
             q_with_attn = attn * q_emb
@@ -94,6 +114,7 @@ class SoftMaxMask(nn.Module):
     Borrowed from Qiao Jin @ https://discuss.pytorch.org/t/apply-mask-softmax/14212/14
     """
     def __init__(self, dim=1, epsilon=1e-5):
+        super().__init__()
         self.dim = dim
         self.epsilon = epsilon
 

@@ -15,19 +15,32 @@ from PIL import Image
 class DataLoaderVQA(data.Dataset):
     def __init__(self,
                  args_dict,
+                 transform = transforms.Compose([
+                                    transforms.Resize(256),  # rescale the image keeping the original aspect ratio
+                                    transforms.CenterCrop(256),  # we get only the center of that rescaled
+                                    transforms.RandomCrop(224),  # random crop within the center crop (data augmentation)
+                                    transforms.RandomHorizontalFlip(),  # random horizontal flip (data augmentation)
+                                    transforms.ToTensor()  # to pytorch tensor
+                                    # transforms.Normalize(mean=[0.485, 0.456, 0.406, ], Coco need it? 
+                                    #                     std=[0.229, 0.224, 0.225])
+                                ]),
+                 MAX_WORDS_QUESTION = 20,
                  dir_data='data',
                  coco_train_path="data/train2014",
                  coco_val_path="data/val2014",
                  trainval_features_path="data/trainval_36",
-                 test_features_path="data/test2014_36"):
+                 test_features_path="data/test2014_36"
+                ):
         """
         Args:
             args_dic: parameters dict
-            set: 'train', 'val', 'test'
-            transform: data transform
+            transform: data transformation for image
+            MAX_WORDS_QUESTION: limit of words that a question can have
         """
 
         self.args_dict = args_dict
+        self.transform = transform
+        self.MAX_WORDS_QUESTION = MAX_WORDS_QUESTION
         self.dir_data = dir_data
         self.coco_train_path = coco_train_path
         self.coco_val_path = coco_val_path
@@ -86,7 +99,7 @@ class DataLoaderVQA(data.Dataset):
         df = df[(df['multiple_choice_answer'].isin(top_3000_answer)) &
                 (df['answer_type'].isin(self.answer_type))]
 
-        # self.images_path = df.apply(lambda x: self.get_img_path(x), axis=1)
+        self.images_path = df.apply(lambda x: self.get_img_path(x), axis=1)
         self.questions = df['question'].apply(self.preprocess_sentence)
         self.vocab = self.get_vocab()
         self.vocab2id = self.get_vocab2id()
@@ -125,7 +138,7 @@ class DataLoaderVQA(data.Dataset):
 
     def get_img_path(self, row):
         """
-        Returns the right path based on the question_id and coco_split
+        Returns the right path based on the question_id and the dataset used
 
         Parameters
         ----------
@@ -135,10 +148,24 @@ class DataLoaderVQA(data.Dataset):
         Returns
         -------
         path to the corresponding image
+        files have the name on the folowing format:
+        COCO_val2014_000000290981.jpg
+        COCO_train2014_000000291894.jpg
         """
+        
         img_id = str(row['image_id'])
-        img_folder = row['coco_split']
         full_number = ''.join((12 - len(img_id)) * ['0']) + img_id
+        
+        # the dataset has a different split compared to the original coco
+        if self.dataset == 'vqa-v2-cp':  
+            img_folder = row['coco_split']
+            
+        elif self.dataset =='vqa-v2':
+            if self.args_dict.train:
+                img_folder = 'train2014'
+            elif self.args_dict.test:
+                img_folder = 'val2014'
+        
         return os.path.join(self.dir_data, img_folder, "COCO_" + img_folder + "_" + full_number + ".jpg")
 
     def get_visual_features_path(self, image_id):
@@ -219,12 +246,10 @@ class DataLoaderVQA(data.Dataset):
     def __getitem__(self, index):
         """Returns data sample as a dict with keys: img_embed, question, answer"""
 
-        # Load image & apply transformation (we only use the pre-calc embbeding)
-        # image = Image.open(self.images_path[index]).convert('RGB')
-        # if self.transform is not None:
-        #    image = self.transform(image)
-        
-        MAX_WORDS_QUESTION = 30
+        # Load image & apply transformation
+        image = Image.open(self.images_path.iloc[index]).convert('RGB')
+        if self.transform is not None:
+            image = self.transform(image)
         
         # Image embedding
         img_embedding = self.get_visual_features(self.img_embeddings_path.iloc[index])['features']
@@ -233,9 +258,9 @@ class DataLoaderVQA(data.Dataset):
         question = self.questions.iloc[index]
         question_words = question.split()
         n_words = len(question_words)
-        quest_vocab_vec = torch.zeros(MAX_WORDS_QUESTION)  # vector used for feeding the quest encoder
+        quest_vocab_vec = torch.zeros(self.MAX_WORDS_QUESTION)  # vector used for feeding the quest encoder
         for i, word in enumerate(question_words):
-            if i >= MAX_WORDS_QUESTION:
+            if i >= self.MAX_WORDS_QUESTION:
                 break
             quest_vocab_vec[i] = self.vocab2id[word]
 
@@ -247,10 +272,10 @@ class DataLoaderVQA(data.Dataset):
         # item returned from the dataset
         item = {
             'img_embed': img_embedding,
-            # 'image': image,
-            # 'question': question,
+            'image': image,
+            # 'question': question,  # in natural language
             'quest_vocab_vec': quest_vocab_vec.type(torch.LongTensor),
-            # 'answer': answer,
+            # 'answer': answer,  # in natural language
             'answer_one_hot': answer_one_hot
         }
 
