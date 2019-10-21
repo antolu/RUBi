@@ -39,27 +39,41 @@ class BaselineNet(nn.Module):
 
         # embedding question
         # question_embedding = inputs['quest_vocab_vec'].expand(b_size, img_embedding.size()[1], inputs['quest_vocab_vec'].size()[1])
-        question_embedding = inputs['quest_vocab_vec'].repeat(1, n_regions).view(b_size, n_regions*quest_size)
-        print("quest repeated")
-        question_embedding = self.skip_thought(Variable(torch.LongTensor(question_embedding)))
+
+        question_embedding = self.skip_thought(Variable(torch.LongTensor(inputs['quest_vocab_vec']))).float()
         print("quest embeded")
         # question_embedding = question_embedding.expand(img_embedding.size()[0], question_embedding[0].size()[0]) 
 
+        expanded_embeddings = question_embedding.unsqueeze(1).expand(b_size, n_regions, question_embedding.shape[1])
+        reshaped_q_emb = expanded_embeddings.contiguous().view(b_size*n_regions, -1)
+        reshaped_img_emb = img_embedding.contiguous().view(b_size*n_regions, -1)
+
+        print("quest repeated")
         # Block fusion 
         print("start block fusion")
-        block_out = [self.fusion_block([quest_e, img_e]) for quest_e,img_e in zip(question_embedding, img_embedding)] 
+        block_out = self.fusion_block([reshaped_q_emb, reshaped_img_emb]) 
         print("fusion block done")
+
+        block_out = block_out.view(b_size, n_regions, -1)
+
+        # TODO: Max pooling
+        (maxpool, argmax) = torch.max(block_out, dim=1)
+        
         # MLP
-        final_out = self.mlp(block_out)
+        final_out = self.mlp(maxpool)
         print("MLP done")
         
-        #TODO: put answer in the format required by loss.py and rubi.py
-        # s ={'lo'}
+        out = {
+            "max": maxpool,
+            "argmax": argmax,
+            "q_emb": question_embedding,
+            "logits": final_out
+        }
         
-        return final_out
+        return out
     
 
-class QuestionEncoder(nn.Module) :
+class QuestionEncoder(nn.Module):
     """
     The question encoder
 
@@ -77,13 +91,14 @@ class QuestionEncoder(nn.Module) :
         self.attn_extractor = nn.Sequential(OrderedDict([
             ("lin1", nn.Linear(2400, 512)),
             ("relu", nn.ReLU()),
-            ("lin2", nn.Linear(512, 2))#,
-            #("mask_softmax", SoftMaxMask())
+            ("lin2", nn.Linear(512, 2)),
+            ("mask_softmax", SoftMaxMask())
         ]))
 
     def forward(self, inputs):
 
-        q_emb = self.text_encoder(inputs)
+        q_emb = self.text_encoder.embedding(inputs)
+        (q_emb, _) = self.text_encoder.rnn(q_emb)
 
         attns = self.attn_extractor(q_emb)
 
@@ -95,8 +110,9 @@ class QuestionEncoder(nn.Module) :
         print("attns: ", attns)
         print("attns size: ", attns.size())
         attns_res = []
-        for attn in torch.unbind(attns, dim=1):
-            attn = attn.unsqueeze(dim=2).expand_as(q_emb)
+        for attn in torch.unbind(attns, dim=2):
+            attn = attn.unsqueeze(dim=2)
+            attn.expand_as(q_emb)
 
             q_with_attn = attn * q_emb
             attns_res.append(q_with_attn.sum(dim=1))
@@ -119,9 +135,10 @@ class SoftMaxMask(nn.Module):
         self.epsilon = epsilon
 
     def forward(self, inputs):
-        max_val = torch.max(inputs, dim=self.dim, keepdim=True)[0] # increases numerical stability
+        max_val = torch.max(inputs, dim=self.dim, keepdim=True)[0]  # increases numerical stability
         numerator = torch.exp(inputs - max_val)
-        numerator = numerator * (inputs == 0).float()  # this step masks
+        mask = (inputs != 0).float()
+        numerator = numerator * mask  # this step masks
 
         denominator = torch.sum(numerator, dim=self.dim, keepdim=True) + self.epsilon
 

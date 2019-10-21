@@ -5,6 +5,7 @@ from __future__ import absolute_import, division, print_function, unicode_litera
 import torch
 import torch.optim as optim
 import torch.utils.data as data
+import os
 
 from models.rubi.baseline_net import BaselineNet
 from models.rubi.rubi import RUBi
@@ -16,6 +17,7 @@ from torch.utils.tensorboard import SummaryWriter
 from utilities.schedule_lr import LrScheduler
 
 from dataloader import DataLoaderVQA
+
 
 args = parse_arguments()
 
@@ -87,7 +89,7 @@ if args.train:
 
                 model.zero_grad()
                 predictions = model(inputs)
-                current_loss = loss(inputs["answers"], predictions)
+                current_loss = loss(inputs["answer_one_hot"], predictions)
                 losses.append(current_loss)
 
                 if args.fp16:
@@ -119,7 +121,7 @@ if args.train:
         filename = args.baseline + "_epoch_{}_dataset_{}_{}_{}.pt".format(epoch, args.dataset, 
                                                                           args.answer_type, 
                                                                           datetime.now().strftime("%Y%m%d%H%M%S"))
-        torch.save(checkpoint, filename)
+        torch.save(checkpoint, os.path.join(args.dir_model, filename))
 
     # Visualize train and test loss and accuracy graphs in tensorboard
     for n_iter in range(len(losses)):
