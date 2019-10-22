@@ -23,8 +23,8 @@ class EarlyStopping(object):
             self.best = metrics
             return False
 
-        if np.isnan(metrics):
-            return True
+        #if np.isnan(metrics):
+        #    return True
 
         if self.is_better(metrics, self.best):
             self.num_bad_epochs = 0

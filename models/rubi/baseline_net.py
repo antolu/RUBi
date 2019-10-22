@@ -7,7 +7,7 @@ from models.block import Block
 from collections import OrderedDict
 
 class BaselineNet(nn.Module):
-    def __init__(self, dir_st, vocab, img_emb_size=2048, text_emb_size=4800, mlp_dimensions = [2048, 3000]):
+    def __init__(self, dir_st, vocab, img_emb_size=2048, text_emb_size=4800, mlp_dimensions=[2048, 2048, 3000]):
         super(BaselineNet, self).__init__()
 
         # also initialise question and image encoder
@@ -20,7 +20,7 @@ class BaselineNet(nn.Module):
         do full foward pass.
         ------
         Parameters
-        inputs: item = dict with keys: 'img_embed', 'image', ''quest_vocab_vec'', 'answer_one_hot'
+        inputs: item = dict with keys: 'img_embed', 'image', ''quest_vocab_vec'', 'answer_one_hot', 'idx_answer'
         
         """
         b_size = inputs['quest_vocab_vec'].size(0)
@@ -30,38 +30,31 @@ class BaselineNet(nn.Module):
 
         # Image embedding (36 regions)
         img_embedding = inputs['img_embed']
-        #print("------------------------")
-        #print("inputs['quest_vocab_vec']", inputs['quest_vocab_vec'].size())
-        #print("b_size", b_size)
-        #print("img_embedding", img_embedding.size())
-        #print("------------------------")
-
 
         # embedding question
         # question_embedding = inputs['quest_vocab_vec'].expand(b_size, img_embedding.size()[1], inputs['quest_vocab_vec'].size()[1])
-
+        #print("start question embeded...")
         question_embedding = self.skip_thought(Variable(torch.LongTensor(inputs['quest_vocab_vec']))).float()
-        print("quest embeded")
+        
         # question_embedding = question_embedding.expand(img_embedding.size()[0], question_embedding[0].size()[0]) 
 
         expanded_embeddings = question_embedding.unsqueeze(1).expand(b_size, n_regions, question_embedding.shape[1])
         reshaped_q_emb = expanded_embeddings.contiguous().view(b_size*n_regions, -1)
         reshaped_img_emb = img_embedding.contiguous().view(b_size*n_regions, -1)
 
-        print("quest repeated")
         # Block fusion 
-        print("start block fusion")
+        #print("start block fusion...")
         block_out = self.fusion_block([reshaped_q_emb, reshaped_img_emb]) 
-        print("fusion block done")
 
         block_out = block_out.view(b_size, n_regions, -1)
 
         # TODO: Max pooling
+        #print("start Max pooling...")
         (maxpool, argmax) = torch.max(block_out, dim=1)
         
         # MLP
+        #print("start MLP...")
         final_out = self.mlp(maxpool)
-        print("MLP done")
         
         out = {
             "max": maxpool,
@@ -102,13 +95,6 @@ class QuestionEncoder(nn.Module):
 
         attns = self.attn_extractor(q_emb)
 
-        print("---------------------")
-        print("inputs: ", inputs)
-        print("---------------------")
-        print("q_emb: ", q_emb)
-        print("---------------------")
-        print("attns: ", attns)
-        print("attns size: ", attns.size())
         attns_res = []
         for attn in torch.unbind(attns, dim=2):
             attn = attn.unsqueeze(dim=2)

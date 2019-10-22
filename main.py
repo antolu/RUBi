@@ -26,7 +26,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("Using device {}.".format(device))
 
 dataset = DataLoaderVQA(args)
-dataloader = data.DataLoader(dataset, batch_size=args.batchsize, num_workers=args.workers)
+dataloader = data.DataLoader(dataset, batch_size=args.batchsize, num_workers=args.workers, shuffle=True)
 #dataloader = DataLoaderVQA(args)
 
 model = None
@@ -89,8 +89,9 @@ if args.train:
 
                 model.zero_grad()
                 predictions = model(inputs)
-                current_loss = loss(inputs["answer_one_hot"], predictions)
-                losses.append(current_loss)
+                current_loss = loss(inputs["idx_answer"].squeeze(1), predictions)
+                losses.append(current_loss.item())
+                print(current_loss.item())
 
                 if args.fp16:
                     with amp.scale_loss(current_loss, optimizer) as scaled_loss:
@@ -99,11 +100,11 @@ if args.train:
                     current_loss.backward()
 
                 optimizer.step()
-                scheduler.step()
+            scheduler.step()
 
-                # early stopping if loss hasn't improved
-                if es.step(current_loss):
-                    break
+            # early stopping if loss hasn't improved
+            if es.step(current_loss):
+                break
 
         print("Training complete after {} epochs.".format(epoch))
     except KeyboardInterrupt:
@@ -125,7 +126,7 @@ if args.train:
 
     # Visualize train and test loss and accuracy graphs in tensorboard
     for n_iter in range(len(losses)):
-        writer.add_scalar('Loss/train', losses[n_iter], n_iter)
+        tensorboard_writer.add_scalar('Loss/train', losses[n_iter], n_iter)
     #    writer.add_scalar('Accuracy/train', np.random.random(), n_iter)
     tensorboard_writer.close()
 

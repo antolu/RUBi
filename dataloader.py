@@ -8,7 +8,7 @@ import torch.utils.data as data
 import pandas as pd
 import torchvision.transforms as transforms
 
-from sklearn.feature_extraction.text import CountVectorizer
+from nltk.tokenize import word_tokenize
 from PIL import Image
 
 
@@ -103,7 +103,7 @@ class DataLoaderVQA(data.Dataset):
         self.questions = df['question'].apply(self.preprocess_sentence)
         self.vocab = self.get_vocab()
         self.vocab2id = self.get_vocab2id()
-        self.answers = df['multiple_choice_answer'].apply(self.preprocess_sentence)
+        self.answers = df['multiple_choice_answer']#.apply(self.preprocess_sentence)
         self.img_embeddings_path = df['image_id'].apply(lambda x: self.get_visual_features_path(x))
 
     def __len__(self):
@@ -130,11 +130,14 @@ class DataLoaderVQA(data.Dataset):
 
         Returns
         -------
-        a list containing all the words present in the questions
+        a set containing all the words present in the questions
         """
-        word_vectorizer = CountVectorizer(ngram_range=(1, 2), analyzer='word')
-        sparse_matrix = word_vectorizer.fit_transform(self.questions)
-        return word_vectorizer.get_feature_names()
+        vocab = set()
+        def toSet(vocab, x):
+            vocab = vocab.update(set(x))
+        self.questions.apply(word_tokenize).apply(lambda x: toSet(vocab, x)) 
+        
+        return vocab
 
     def get_img_path(self, row):
         """
@@ -267,7 +270,7 @@ class DataLoaderVQA(data.Dataset):
         # Answer
         answer = self.answers.iloc[index]
         answer_one_hot = torch.zeros(3000)  # vector used for the loss
-        answer_one_hot[self.answer2idx[answer]] = 1.0
+        # answer_one_hot[self.answer2idx[answer]] = 1.0
         
         # item returned from the dataset
         item = {
@@ -276,7 +279,8 @@ class DataLoaderVQA(data.Dataset):
             # 'question': question,  # in natural language
             'quest_vocab_vec': quest_vocab_vec.type(torch.LongTensor),
             # 'answer': answer,  # in natural language
-            'answer_one_hot': answer_one_hot
+            #'answer_one_hot': answer_one_hot,
+            'idx_answer': torch.Tensor([self.answer2idx[answer]]).type(torch.LongTensor)  # class indices
         }
 
         return item
