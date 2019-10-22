@@ -57,9 +57,19 @@ installPackages() {
                 sudo apt-get install -y axel
             ;;
         esac
-    sudo systemctl start docker
-    sudo systemctl enable docker
-    sudo usermod -aG docker $USER
+    fi
+
+    if [[ -z `command -v unzip` ]]; then
+        echo "Installing unzip"
+        case $ID in
+            arch)
+                sudo pacman -Sy --needed --noconfirm unzip
+            ;;
+            ubuntu|debian)
+                sudo apt-get update
+                sudo apt-get install -y unzip
+            ;;
+        esac
     fi
 
     if [[ $GPU == "nvidia" ]]; then
@@ -191,8 +201,8 @@ getVisualFeatures() {
 #
 #..........................................................
 splitVisualFeatures() {
-    docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python2 tools/parse_visual_features.py data/trainval_36/trainval_resnet101_faster_rcnn_genome_36.tsv"
-    docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python2 tools/parse_visual_features.py data/test2014_36/test2014_resnet101_faster_rcnn_genome_36.tsv"
+    $SUDO docker exec -it -w /home/RUBi -u $(id -u):$(id -g) pytorch-rubi bash -c "python2 tools/parse_visual_features.py data/trainval_36/trainval_resnet101_faster_rcnn_genome_36.tsv"
+    $SUDO docker exec -it -w /home/RUBi -u $(id -u):$(id -g) pytorch-rubi bash -c "python2 tools/parse_visual_features.py data/test2014_36/test2014_resnet101_faster_rcnn_genome_36.tsv"
 }
 
 #...........................................................
@@ -222,15 +232,13 @@ getVQADataset() {
     rm -f test2014.zip
 
     echo "Getting VQA v2"
-    mkdir vqa_v2
+    mkdir -p vqa_v2
     cd vqa_v2
     axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Train_mscoco.zip
     axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Train_mscoco.zip
     axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Val_mscoco.zip
     axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Val_mscoco.zip
     axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Test_mscoco.zip
-
-    cd ..
 
     unzip v2_Annotations_Train_mscoco.zip
     rm -f v2_Annotations_Train_mscoco.zip
@@ -242,6 +250,8 @@ getVQADataset() {
     rm -f v2_Questions_Val_mscoco.zip
     unzip v2_Questions_Test_mscoco.zip
     rm -f v2_Questions_Test_mscoco.zip
+
+    cd ..
 
     echo "Getting VQA-CP v2"
     mkdir -p vqacp_v2
@@ -293,7 +303,7 @@ checkDockerPermissions() {
     docker ps > /dev/null
     if [[ $? -ne 0 ]]; then
         echo -e "\n=> Docker seems to need sudo permissions. You probably need to log out from your user and log in again.\n"
-        $SUDO="sudo "
+        SUDO="sudo "
     fi
     
     set -e
@@ -411,6 +421,7 @@ deploy() {
         if [[ ! -z $DATASETS ]]; then
             getVisualFeatures
             getVQADataset
+            getSkipThoughtData
         fi
 
         checkDockerPermissions
