@@ -31,7 +31,7 @@ def parse_arguments():
                            help="Test the model")
     traintest.add_argument("--test_dev", action="store_true",
                            help="Test-dev the model")
-    parser.add_argument("--no-epochs", type=int, default=1000000, dest="no_epochs",
+    parser.add_argument("--no-epochs", type=int, default=100, dest="no_epochs",
                         help="Number of epochs to train the model")
     parser.add_argument("-lr", "--lr", type=float, default=1.5e-4,
                         help="The learning rate for the Adam optimiser.")

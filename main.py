@@ -6,6 +6,8 @@ import torch
 import torch.optim as optim
 import torch.utils.data as data
 import os
+from tqdm import trange
+from math import ceil
 
 from models.rubi.baseline_net import BaselineNet
 from models.rubi.rubi import RUBi
@@ -78,33 +80,37 @@ if args.train:
     es = EarlyStopping(min_delta=args.eps, patience=args.patience)
 
     try:
-        epoch = 0
-        while True:
-            epoch += 1
+        with trange(args.no_epochs) as t:
+            for epoch in t:
 
-            # assume inputs is a dict
-            for i_batch, inputs in enumerate(dataloader):
-                for key, value in inputs.items():
-                    value.to(device)
+                # assume inputs is a dict
+                for i_batch, inputs in enumerate(dataloader):
+                    for key, value in inputs.items():
+                        value.to(device)
 
-                model.zero_grad()
-                predictions = model(inputs)
-                current_loss = loss(inputs["idx_answer"].squeeze(1), predictions)
-                losses.append(current_loss.item())
-                print(current_loss.item())
+                    model.zero_grad()
+                    predictions = model(inputs)
+                    current_loss = loss(inputs["idx_answer"].squeeze(1), predictions)
+                    losses.append(current_loss.item())
 
-                if args.fp16:
-                    with amp.scale_loss(current_loss, optimizer) as scaled_loss:
-                        scaled_loss.backward()
-                else:
-                    current_loss.backward()
+                    if args.fp16:
+                        with amp.scale_loss(current_loss, optimizer) as scaled_loss:
+                            scaled_loss.backward()
+                    else:
+                        current_loss.backward()
 
-                optimizer.step()
-            scheduler.step()
+                    optimizer.step()
 
-            # early stopping if loss hasn't improved
-            if es.step(current_loss):
-                break
+                    t.set_description(
+                        f"E:{epoch} | "
+                        f"Loss:{current_loss.item()} | "
+                        f"Batch {i_batch}/{ceil(len(dataset)/args.batchsize)}"
+                    )
+                scheduler.step()
+
+                # early stopping if loss hasn't improved
+                if es.step(current_loss):
+                    break
 
         print("Training complete after {} epochs.".format(epoch))
     except KeyboardInterrupt:

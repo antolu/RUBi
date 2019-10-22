@@ -10,3 +10,4 @@ sklearn
 nltk
 tensorboard
 pandas
+tqdm
