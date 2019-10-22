@@ -15,7 +15,7 @@ def parse_arguments():
                         help="Path to the root directory containing the image datasets")
     parser.add_argument('--dir_data', default='data', type=str,
                         help="Path to the root directory containing the other data")
-    parser.add_argument('--dir_model', default='Models/',
+    parser.add_argument('--dir_model', default='models/',
                         help='Path to project data')
     parser.add_argument('--pretrained-model', dest='pretrained_model', default=None,
                         help='path to pretrained-model')

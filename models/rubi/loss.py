@@ -48,4 +48,4 @@ class BaselineLoss:
     - labels: one-hot encodings
     """
     def __call__(self, labels, logits):
-        return nn.CrossEntropyLoss(logits["logits"], labels)
+        return self.loss(logits["logits"], labels)
