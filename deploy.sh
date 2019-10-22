@@ -242,6 +242,33 @@ getVQADataset() {
     cd ../..
 }
 
+#............................................................
+#
+# Fetches pretrained models and dictionaries needed by the
+#    skip thought text encoder.
+#
+#............................................................
+getSkipThoughtData() {
+    echo "=> Getting the skip thought dataa"
+
+    if [[ ! -d $DATADIR ]]; then
+        mkdir -p $DATADIR
+    fi
+
+    cd $DATADIR
+
+    mkdir -p skip_thoughts
+    cd skip_thoughts
+    
+    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/dictionary.txt
+    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/utable.npy
+    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/uni_skip.npz
+    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/btable.npy
+    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/bi_skip.npz
+
+    cd ..
+}
+
 
 #............................................................
 #
@@ -282,7 +309,7 @@ buildTFImage() {
 #
 #............................................................
 buildPyTorchImage() {
-    $SUDO docker build --file ./Dockerfile/pytorch.Dockerfile -t pytorch-rubi --build-args GPU=$GPU.
+    $SUDO docker build --file ./Dockerfile/pytorch.Dockerfile -t pytorch-rubi --build-arg GPU=$GPU .
 }
 
 #............................................................
@@ -349,6 +376,10 @@ runTFContainer() {
 runPyTorchContainer() {
     DOCKERARGS="-tid -p 8888:8888 -p 6006:6006 --name pytorch-rubi -v $PWD:/home/RUBi"
     
+    if [[ $GPU == "nvidia" ]]; then
+        DOCKERARGS+=" --gpus all"
+    fi
+
     $SUDO docker run $DOCKERARGS pytorch-rubi:latest
 }
 
