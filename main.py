@@ -19,6 +19,7 @@ from torch.utils.tensorboard import SummaryWriter
 from utilities.schedule_lr import LrScheduler
 
 from dataloader import DataLoaderVQA
+from utilities.test import compute_acc
 
 
 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -48,13 +49,13 @@ else:
 smooth_loss = None
 # Load pretrained model if exists
 if args.pretrained_model:
-    pretrained_model = torch.load(args.pretrained_model, map_device=device)
+    pretrained_model = torch.load(args.pretrained_model, map_location=device)
     model.load_state_dict(pretrained_model["model"])
 
     
 if args.train:
     
-    losses_writer = open(f"losses_{timestamp}.csv", "w")
+    losses_writer = open(os.path.join(args.dir_model, f"losses_{timestamp}.csv"), "w")
     losses_writer.write("epoch, loss, smooth_loss")
     
     # tensorboard Writer will output to /runs directory
@@ -155,12 +156,20 @@ if args.train:
     tensorboard_writer.close()
 
 elif args.test:
-    raise NotImplementedError()
-    # tensorboard_writer = SummaryWriter(filename_suffix='test')
-    # # Visualize train and test loss and accuracy graphs
-    # # tensorboard will group them together according to their name
-    # for n_iter in range(len(losses)):
-    #     writer.add_scalar('Loss/train', losses[n_iter], n_iter)
-    #     writer.add_scalar('Accuracy/train', np.random.random(), n_iter)
-    # tensorboard_writer.close()
+    model.eval()
+    for i, inputs in enumerate(dataset):
+        for key, value in inputs:
+            inputs[key] = value.to(device)
+        
+            predictions = model(inputs)
+            test_loss = loss(inputs["idx_answer"], predictions)
+            test_acc = compute_acc(inputs['answers'], predictions)
+    
+    tensorboard_writer = SummaryWriter(filename_suffix='test')
+    # Visualize computational graph, test loss and acc in tensorboard
+    writer.add_graph(model, predictions)
+    writer.add_scalar('Loss/test', test_loss, n_iter)
+    writer.add_scalar('Accuracy/test', test_acc, n_iter)
+    tensorboard_writer.close()
+    
 

@@ -33,23 +33,8 @@ class LrScheduler:
             epoch = self.last_epoch + 1
         self.last_epoch = epoch
 
-        lr = self.get_lr()
         for param_group in self.optimizer.param_groups:
             if self.last_epoch <= self.switch[0]:
                 param_group['lr'] += self.gamma1
             elif self.last_epoch > self.switch[1]:
                 param_group['lr'] *= self.gamma2
-        self.lr = lr
-
-    def get_lr(self):
-        """
-        Returns the learning rate at the current epoch
-
-        Returns:
-        --------
-        The new learning rate
-        """
-        if self.last_epoch <= self.switch[0]:
-            return self.gamma1 + self.lr
-        elif self.last_epoch > self.switch[1]:
-            return self.gamma2 * self.lr
