@@ -21,6 +21,7 @@ from utilities.schedule_lr import LrScheduler
 from dataloader import DataLoaderVQA
 
 
+timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
 args = parse_arguments()
 
 # Check if GPU can be used, else use CPU
@@ -50,7 +51,12 @@ if args.pretrained_model:
     pretrained_model = torch.load(args.pretrained_model, map_device=device)
     model.load_state_dict(pretrained_model["model"])
 
+    
 if args.train:
+    
+    losses_writer = open(f"losses_{timestamp}.csv", "w")
+    losses_writer.write("epoch, loss, smooth_loss")
+    
     # tensorboard Writer will output to /runs directory
     tensorboard_writer = SummaryWriter(filename_suffix='train')
     losses = []
@@ -106,11 +112,13 @@ if args.train:
                         smooth_loss = 0.99*smooth_loss + 0.01*current_loss.item()
                     else:
                         smooth_loss = current_loss.item()
-
+                    
+                    losses_writer.write("{}, {}, {}".format(epoch, current_loss.item(), smooth_loss))
+                    
                     t.set_description(
                         f"E:{epoch} | "
-                        f"Loss:{current_loss.item()} | "
-                        f"SmoothLoss:{smooth_loss} | "
+                        f"Loss:{current_loss.item():.3} | "
+                        f"SmoothLoss:{smooth_loss:.3} | "
                         f"Batch {i_batch}/{ceil(len(dataset)/args.batchsize)}"
                     )
                 scheduler.step()
@@ -136,8 +144,9 @@ if args.train:
 
         filename = args.baseline + "_epoch_{}_dataset_{}_{}_{}.pt".format(epoch, args.dataset, 
                                                                           args.answer_type, 
-                                                                          datetime.now().strftime("%Y%m%d%H%M%S"))
+                                                                          timestamp)
         torch.save(checkpoint, os.path.join(args.dir_model, filename))
+        losses_writer.close()
 
     # Visualize train and test loss and accuracy graphs in tensorboard
     for n_iter in range(len(losses)):
