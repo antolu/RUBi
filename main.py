@@ -44,7 +44,7 @@ if args.rubi:
     loss = RUBiLoss(args["loss-weights"][0], args["loss-weights"][1])
 else:
     loss = BaselineLoss()
-
+smooth_loss = None
 # Load pretrained model if exists
 if args.pretrained_model:
     pretrained_model = torch.load(args.pretrained_model, map_device=device)
@@ -62,11 +62,6 @@ if args.train:
 
     optimizer = optim.Adamax(model.parameters(), lr=args.lr)
 
-    if args.fp16:
-        scheduler = LrScheduler(optimizer.optimizer)
-    else:
-        scheduler = LrScheduler(optimizer)
-
     # use FP16
     if args.fp16:
         import apex.amp as amp
@@ -77,6 +72,11 @@ if args.train:
         if args.fp16:
             amp.load_state_dict(args.pretrained_model["amp"])
 
+    if args.fp16:
+        scheduler = LrScheduler(optimizer.optimizer)
+    else:
+        scheduler = LrScheduler(optimizer)
+
     es = EarlyStopping(min_delta=args.eps, patience=args.patience)
 
     try:
@@ -86,7 +86,7 @@ if args.train:
                 # assume inputs is a dict
                 for i_batch, inputs in enumerate(dataloader):
                     for key, value in inputs.items():
-                        value.to(device)
+                        inputs[key] = value.to(device)
 
                     model.zero_grad()
                     predictions = model(inputs)
@@ -100,16 +100,25 @@ if args.train:
                         current_loss.backward()
 
                     optimizer.step()
+                    
+                     # smooth lossnless sensitive to outliers
+                    if smooth_loss:
+                        smooth_loss = 0.99*smooth_loss + 0.01*current_loss.item()
+                    else:
+                        smooth_loss = current_loss.item()
 
                     t.set_description(
                         f"E:{epoch} | "
                         f"Loss:{current_loss.item()} | "
+                        f"SmoothLoss:{smooth_loss} | "
                         f"Batch {i_batch}/{ceil(len(dataset)/args.batchsize)}"
                     )
                 scheduler.step()
 
                 # early stopping if loss hasn't improved
-                if es.step(current_loss):
+                
+                if es.step(smooth_loss):
+                    print("Early stop activated")
                     break
 
         print("Training complete after {} epochs.".format(epoch))

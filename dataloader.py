@@ -48,6 +48,7 @@ class DataLoaderVQA(data.Dataset):
         self.test_features_path = test_features_path
         self.dataset = args_dict.dataset  # vqacp_v2 | vqa_v2
         self.vocab = []  # vocab related with the dataset questions
+        self.question_vecs = {}
         
         if args_dict.answer_type == 'all':
             self.answer_type = ['yes/no', 'number', 'other']
@@ -71,6 +72,10 @@ class DataLoaderVQA(data.Dataset):
             elif args_dict.test:
                 df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_test_annotations.json'))
                 df_quest = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_test_questions.json'))
+                
+            df = pd.merge(df_annot[['question_type', 'multiple_choice_answer',
+                                    'image_id', 'answer_type', 'question_id']],
+                          df_quest[['coco_split', 'question', 'question_id']], on='question_id')
 
         elif self.dataset == 'vqa-v2':
             if args_dict.train:
@@ -92,15 +97,15 @@ class DataLoaderVQA(data.Dataset):
             df_annot = pd.DataFrame(df_annot['annotations'])
             df_quest = pd.DataFrame(df_quest['questions'])
 
-        df = pd.merge(df_annot[['question_type', 'multiple_choice_answer',
-                                'image_id', 'answer_type', 'question_id']],
-                      df_quest[['coco_split', 'question', 'question_id']], on='question_id')
+            df = pd.merge(df_annot[['question_type', 'multiple_choice_answer',
+                                    'image_id', 'answer_type', 'question_id']],
+                          df_quest[['question', 'question_id']], on='question_id')
 
         df = df[(df['multiple_choice_answer'].isin(top_3000_answer)) &
                 (df['answer_type'].isin(self.answer_type))]
 
         self.images_path = df.apply(lambda x: self.get_img_path(x), axis=1)
-        self.questions = df['question'].apply(self.preprocess_sentence)
+        self.questions = df['question'].apply(self.preprocess_sentence) 
         self.vocab = self.get_vocab()
         self.vocab2id = self.get_vocab2id()
         self.answers = df['multiple_choice_answer']#.apply(self.preprocess_sentence)
@@ -210,24 +215,6 @@ class DataLoaderVQA(data.Dataset):
 
         return out
 
-    def get_img_path(self, row):
-        """
-        Returns the right path based on the question_id and coco_split
-
-        Parameters
-        ----------
-        row : row of DataFrame
-            row with all atributes of que dataset
-
-        Returns
-        -------
-        path to the corresponding image
-        """
-        img_id = str(row['image_id'])
-        img_folder = row['coco_split']
-        full_number = ''.join((12 - len(img_id)) * ['0']) + img_id
-        return os.path.join(self.dir_data, img_folder, "COCO_" + img_folder + "_" + full_number + ".jpg")
-
     def preprocess_sentence(self, sentence):
         """
         returns the preprocessed question
@@ -250,22 +237,29 @@ class DataLoaderVQA(data.Dataset):
         """Returns data sample as a dict with keys: img_embed, question, answer"""
 
         # Load image & apply transformation
-        image = Image.open(self.images_path.iloc[index]).convert('RGB')
-        if self.transform is not None:
-            image = self.transform(image)
+        if self.args_dict.baseline == 'san' or self.args_dict.test:
+            image = Image.open(self.images_path.iloc[index]).convert('RGB')
+            if self.transform is not None:
+                image = self.transform(image)
+        else:
+            image = torch.Tensor()
         
         # Image embedding
         img_embedding = self.get_visual_features(self.img_embeddings_path.iloc[index])['features']
 
         # Question
         question = self.questions.iloc[index]
-        question_words = question.split()
-        n_words = len(question_words)
-        quest_vocab_vec = torch.zeros(self.MAX_WORDS_QUESTION)  # vector used for feeding the quest encoder
-        for i, word in enumerate(question_words):
-            if i >= self.MAX_WORDS_QUESTION:
-                break
-            quest_vocab_vec[i] = self.vocab2id[word]
+        if index not in self.question_vecs or not self.args_dict.store_questions:
+            question_words = word_tokenize(question)
+            quest_vocab_vec = torch.zeros(self.MAX_WORDS_QUESTION)  # vector used for feeding the quest encoder
+            for i, word in enumerate(question_words):
+                if i >= self.MAX_WORDS_QUESTION:
+                    break
+                quest_vocab_vec[i] = self.vocab2id[word]
+
+            self.question_vecs[index] = quest_vocab_vec
+        else:
+            quest_vocab_vec = self.question_vecs[index]
 
         # Answer
         answer = self.answers.iloc[index]
@@ -278,6 +272,7 @@ class DataLoaderVQA(data.Dataset):
             'image': image,
             # 'question': question,  # in natural language
             'quest_vocab_vec': quest_vocab_vec.type(torch.LongTensor),
+            'quest_size': torch.Tensor([len(word_tokenize(question))]).type(torch.LongTensor),  # size of each question
             # 'answer': answer,  # in natural language
             #'answer_one_hot': answer_one_hot,
             'idx_answer': torch.Tensor([self.answer2idx[answer]]).type(torch.LongTensor)  # class indices

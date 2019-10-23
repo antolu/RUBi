@@ -20,7 +20,7 @@ class BaselineNet(nn.Module):
         do full foward pass.
         ------
         Parameters
-        inputs: item = dict with keys: 'img_embed', 'image', ''quest_vocab_vec'', 'answer_one_hot', 'idx_answer'
+        inputs: item = dict with keys: 'img_embed', 'image', 'quest_vocab_vec', 'quest_size', 'answer_one_hot', 'idx_answer'
         
         """
         b_size = inputs['quest_vocab_vec'].size(0)
@@ -34,7 +34,7 @@ class BaselineNet(nn.Module):
         # embedding question
         # question_embedding = inputs['quest_vocab_vec'].expand(b_size, img_embedding.size()[1], inputs['quest_vocab_vec'].size()[1])
         #print("start question embeded...")
-        question_embedding = self.skip_thought(Variable(torch.LongTensor(inputs['quest_vocab_vec']))).float()
+        question_embedding = self.skip_thought(inputs).float()
         
         # question_embedding = question_embedding.expand(img_embedding.size()[0], question_embedding[0].size()[0]) 
 
@@ -84,16 +84,19 @@ class QuestionEncoder(nn.Module):
         self.attn_extractor = nn.Sequential(OrderedDict([
             ("lin1", nn.Linear(2400, 512)),
             ("relu", nn.ReLU()),
-            ("lin2", nn.Linear(512, 2)),
-            ("mask_softmax", SoftMaxMask())
+            ("lin2", nn.Linear(512, 2))
         ]))
+        
+        self.softmaxMask = SoftMaxMask()
 
     def forward(self, inputs):
 
-        q_emb = self.text_encoder.embedding(inputs)
+        q_emb = self.text_encoder.embedding(inputs['quest_vocab_vec'])
         (q_emb, _) = self.text_encoder.rnn(q_emb)
 
         attns = self.attn_extractor(q_emb)
+        
+        attns = self.softmaxMask(attns, inputs['quest_size'])
 
         attns_res = []
         for attn in torch.unbind(attns, dim=2):
@@ -120,10 +123,19 @@ class SoftMaxMask(nn.Module):
         self.dim = dim
         self.epsilon = epsilon
 
-    def forward(self, inputs):
+    def forward(self, inputs, question_lengths):
+        
         max_val = torch.max(inputs, dim=self.dim, keepdim=True)[0]  # increases numerical stability
         numerator = torch.exp(inputs - max_val)
-        mask = (inputs != 0).float()
+    
+        mask = torch.zeros_like(inputs).to(device=inputs.device, non_blocking=True)
+        t_lengths = question_lengths[:,:,None].expand_as(mask)
+        arange_id = torch.arange(mask.size(1)).to(device=inputs.device, non_blocking=True)
+        arange_id = arange_id[None,:,None].expand_as(mask)
+
+        mask[arange_id<t_lengths] = 1
+
+        # mask = (inputs != 0).float()
         numerator = numerator * mask  # this step masks
 
         denominator = torch.sum(numerator, dim=self.dim, keepdim=True) + self.epsilon

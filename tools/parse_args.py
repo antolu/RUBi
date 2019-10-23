@@ -19,7 +19,7 @@ def parse_arguments():
                         help='Path to project data')
     parser.add_argument('--pretrained-model', dest='pretrained_model', default=None,
                         help='path to pretrained-model')
-    parser.add_argument('--answer-type', default='number', type=str, dest="answer_type",
+    parser.add_argument('--answer-type', default='all', type=str, dest="answer_type",
                         choices=["all", "number", "yes-no", "other"], help='answer type (all | number | yes-no | other)')
 
 
@@ -31,6 +31,8 @@ def parse_arguments():
                            help="Test the model")
     traintest.add_argument("--test_dev", action="store_true",
                            help="Test-dev the model")
+    parser.add_argument("--store-questions", dest="store_questions", action="store_true",
+                        help="Store question vectors in memory after first epoch to speed up training.")
     parser.add_argument("--no-epochs", type=int, default=100, dest="no_epochs",
                         help="Number of epochs to train the model")
     parser.add_argument("-lr", "--lr", type=float, default=1.5e-4,
@@ -57,7 +59,7 @@ def parse_arguments():
     parser.add_argument('--resume', default='', type=str)
     parser.add_argument('--start-epoch', default=0, type=int, dest="start_epoch",
                         help="The epoch to start/resume training at")
-    parser.add_argument('--patience', default=1, type=int)
+    parser.add_argument('--patience', default=3, type=int)
 
 
     # Images
