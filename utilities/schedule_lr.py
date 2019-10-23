@@ -35,7 +35,11 @@ class LrScheduler:
 
         lr = self.get_lr()
         for param_group in self.optimizer.param_groups:
-            param_group['lr'] = lr
+            if self.last_epoch <= self.switch[0]:
+                param_group['lr'] += self.gamma1
+            elif self.last_epoch > self.switch[1]:
+                param_group['lr'] *= self.gamma2
+        self.lr = lr
 
     def get_lr(self):
         """
@@ -45,7 +49,7 @@ class LrScheduler:
         --------
         The new learning rate
         """
-        if self.last_epoch < self.switch[0]:
+        if self.last_epoch <= self.switch[0]:
             return self.gamma1 + self.lr
-        elif self.epoch >= self.switch[1]:
+        elif self.last_epoch > self.switch[1]:
             return self.gamma2 * self.lr

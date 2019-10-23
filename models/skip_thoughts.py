@@ -45,7 +45,7 @@ class AbstractSkipThoughts(nn.Module):
         if not os.path.exists(path_dico):
             os.system('mkdir -p ' + self.dir_st)
             os.system('wget {} -P {}'.format(urls['dictionary'], self.dir_st))
-        with open(path_dico, 'r') as handle:
+        with open(path_dico, 'r', encoding="utf-8") as handle:
             dico_list = handle.readlines()
         dico = {word.strip():idx for idx,word in enumerate(dico_list)}
         return dico

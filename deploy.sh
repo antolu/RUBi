@@ -57,9 +57,19 @@ installPackages() {
                 sudo apt-get install -y axel
             ;;
         esac
-    sudo systemctl start docker
-    sudo systemctl enable docker
-    sudo usermod -aG docker $USER
+    fi
+
+    if [[ -z `command -v unzip` ]]; then
+        echo "Installing unzip"
+        case $ID in
+            arch)
+                sudo pacman -Sy --needed --noconfirm unzip
+            ;;
+            ubuntu|debian)
+                sudo apt-get update
+                sudo apt-get install -y unzip
+            ;;
+        esac
     fi
 
     if [[ $GPU == "nvidia" ]]; then
@@ -81,7 +91,19 @@ installPackages() {
         rm -rf libnvidia-container nvidia-container-toolkit
         ;;
         ubuntu|debian)
-        sudo apt install -y nvidia-cuda-toolkit nvidia-container-toolkit
+	    wget https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/cuda-ubuntu1804.pin
+	    sudo mv cuda-ubuntu1804.pin /etc/apt/preferences.d/cuda-repository-pin-600
+	    sudo apt-key adv --fetch-keys https://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/7fa2af80.pub
+	    sudo add-apt-repository "deb http://developer.download.nvidia.com/compute/cuda/repos/ubuntu1804/x86_64/ /"
+
+	    curl -s -L https://nvidia.github.io/nvidia-container-runtime/gpgkey | \
+		sudo apt-key add -
+	    distribution=$(. /etc/os-release;echo $ID$VERSION_ID)
+	    curl -s -L https://nvidia.github.io/nvidia-container-runtime/$distribution/nvidia-container-runtime.list | \
+		sudo tee /etc/apt/sources.list.d/nvidia-container-runtime.list
+
+	    sudo apt-get update
+	    sudo apt-get -y install cuda nvidia-container-runtime
         ;;
     esac
     sudo systemctl restart docker
@@ -179,8 +201,8 @@ getVisualFeatures() {
 #
 #..........................................................
 splitVisualFeatures() {
-    docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python2 tools/parse_visual_features.py data/trainval_36/trainval_resnet101_faster_rcnn_genome_36.tsv"
-    docker exec -it -w /home/RUBi -u $(id -u):$(id -g) tf-rubi bash -c "python2 tools/parse_visual_features.py data/test2014_36/test2014_resnet101_faster_rcnn_genome_36.tsv"
+    $SUDO docker exec -it -w /home/RUBi -u $(id -u):$(id -g) pytorch-rubi bash -c "python2 tools/parse_visual_features.py data/trainval_36/trainval_resnet101_faster_rcnn_genome_36.tsv"
+    $SUDO docker exec -it -w /home/RUBi -u $(id -u):$(id -g) pytorch-rubi bash -c "python2 tools/parse_visual_features.py data/test2014_36/test2014_resnet101_faster_rcnn_genome_36.tsv"
 }
 
 #...........................................................
@@ -210,15 +232,13 @@ getVQADataset() {
     rm -f test2014.zip
 
     echo "Getting VQA v2"
-    mkdir vqa_v2
+    mkdir -p vqa_v2
     cd vqa_v2
     axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Train_mscoco.zip
     axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Train_mscoco.zip
     axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Annotations_Val_mscoco.zip
     axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Val_mscoco.zip
     axel -qn20 https://s3.amazonaws.com/cvmlp/vqa/mscoco/vqa/v2_Questions_Test_mscoco.zip
-
-    cd ..
 
     unzip v2_Annotations_Train_mscoco.zip
     rm -f v2_Annotations_Train_mscoco.zip
@@ -231,6 +251,8 @@ getVQADataset() {
     unzip v2_Questions_Test_mscoco.zip
     rm -f v2_Questions_Test_mscoco.zip
 
+    cd ..
+
     echo "Getting VQA-CP v2"
     mkdir -p vqacp_v2
     cd vqacp_v2
@@ -240,6 +262,33 @@ getVQADataset() {
     axel -qn20 https://computing.ece.vt.edu/~aish/vqacp/vqacp_v2_test_questions.json
 
     cd ../..
+}
+
+#............................................................
+#
+# Fetches pretrained models and dictionaries needed by the
+#    skip thought text encoder.
+#
+#............................................................
+getSkipThoughtData() {
+    echo "=> Getting the skip thought dataa"
+
+    if [[ ! -d $DATADIR ]]; then
+        mkdir -p $DATADIR
+    fi
+
+    cd $DATADIR
+
+    mkdir -p skip_thoughts
+    cd skip_thoughts
+    
+    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/dictionary.txt
+    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/utable.npy
+    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/uni_skip.npz
+    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/btable.npy
+    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/bi_skip.npz
+
+    cd ..
 }
 
 
@@ -254,7 +303,7 @@ checkDockerPermissions() {
     docker ps > /dev/null
     if [[ $? -ne 0 ]]; then
         echo -e "\n=> Docker seems to need sudo permissions. You probably need to log out from your user and log in again.\n"
-        $SUDO="sudo "
+        SUDO="sudo "
     fi
     
     set -e
@@ -282,7 +331,7 @@ buildTFImage() {
 #
 #............................................................
 buildPyTorchImage() {
-    $SUDO docker build --file ./Dockerfile/pytorch.Dockerfile -t pytorch-rubi --build-args GPU=$GPU.
+    $SUDO docker build --file ./Dockerfile/pytorch.Dockerfile -t pytorch-rubi --build-arg GPU=$GPU .
 }
 
 #............................................................
@@ -330,7 +379,7 @@ removePyTorchContainer() {
 #
 #............................................................
 runTFContainer() {
-    DOCKERARGS="-tid -p 8888:8888 --name tf-rubi -v $PWD:/home/RUBi"
+    DOCKERARGS="-tid -p 8888:8888 -p 6006:6006 --name tf-rubi -v $PWD:/home/RUBi"
     
     if [[ $GPU == "nvidia" ]]; then
         DOCKERARGS+=" --gpus all"
@@ -347,8 +396,12 @@ runTFContainer() {
 #
 #............................................................
 runPyTorchContainer() {
-    DOCKERARGS="-tid -p 8888:8888 --name pytorch-rubi -v $PWD:/home/RUBi"
+    DOCKERARGS="-tid -p 8888:8888 -p 6006:6006 --name pytorch-rubi --ipc=host -v $PWD:/home/RUBi"
     
+    if [[ $GPU == "nvidia" ]]; then
+        DOCKERARGS+=" --gpus all"
+    fi
+
     $SUDO docker run $DOCKERARGS pytorch-rubi:latest
 }
 
@@ -368,6 +421,7 @@ deploy() {
         if [[ ! -z $DATASETS ]]; then
             getVisualFeatures
             getVQADataset
+            getSkipThoughtData
         fi
 
         checkDockerPermissions

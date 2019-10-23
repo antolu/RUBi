@@ -30,8 +30,9 @@ class RUBi(nn.Module):
         visual_emb = inputs["visual_emb"]
         
         base_out = self.model(text, visual_emb)
-        
-        x = self.mlp(base_out['q_emb'])
+
+        q_emb = base_out['q_emb'].detach()
+        x = self.mlp(q_emb)
 
         mask = nn.Sigmoid(x)
         aQM = mask * base_out['logits']
