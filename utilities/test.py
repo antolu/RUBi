@@ -1,3 +1,4 @@
+
 import torch
 import torch.nn as nn
 import cv2
@@ -8,7 +9,6 @@ def compute_acc(labels, predictions):
     predictions: output of a forward pass through the model
     computes the accuracy by comparing them with the correct labels
     """
-
     softmax = nn.Softmax(dim=1)
 
     predictions = softmax(predictions["logits"])
@@ -43,3 +43,4 @@ def disp_tensor(tnsr):
     plt.imshow(img)
     plt.show()
     plt.clf()
+

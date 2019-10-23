@@ -19,8 +19,8 @@ from torch.utils.tensorboard import SummaryWriter
 from utilities.schedule_lr import LrScheduler
 
 from dataloader import DataLoaderVQA
-from utilities.test import compute_acc
 from utilities.vocabulary_mapping import load_vocab
+from utilities.test import compute_acc
 
 
 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
