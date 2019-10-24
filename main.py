@@ -157,19 +157,21 @@ if args.train:
 
 elif args.test:
     model.eval()
-    for i, inputs in enumerate(dataset):
-        for key, value in inputs:
-            inputs[key] = value.to(device)
-        
+    no_correct = 0
+
+    if args.eval_metric == "accuracy":
+        for i, inputs in enumerate(dataloader):
+            for key, value in inputs:
+                inputs[key] = value.to(device)
+
             predictions = model(inputs)
             test_loss = loss(inputs["idx_answer"], predictions)
-            test_acc = compute_acc(inputs['answers'], predictions)
-    
-    tensorboard_writer = SummaryWriter(filename_suffix='test')
-    # Visualize computational graph, test loss and acc in tensorboard
-    writer.add_graph(model, predictions)
-    writer.add_scalar('Loss/test', test_loss, n_iter)
-    writer.add_scalar('Accuracy/test', test_acc, n_iter)
-    tensorboard_writer.close()
+            no_correct += compute_acc(inputs['idx_answer'], predictions)
+
+        accuracy = no_correct / len(dataset)
+
+        print(f"Accuracy {accuracy} on dataset {args.dataset} with answer type {args.answer_type}")
+    elif args.eval_metric == "attention":
+        raise NotImplementedError()
     
 

@@ -51,6 +51,7 @@ def parse_arguments():
                         help="Which optimisation to use for mixed precision training.")
     parser.add_argument("--rubi", action="store_true",
                         help="Use RUBi question-only branch during training.")
+    parser.add_argument("--eval-metric", type=str, dest="eval_metric", default="accuracy", choices=["accuracy", "attention"])
 
     parser.add_argument('--workers', default=8, type=int,
                         help="Number of workers for training the network")
