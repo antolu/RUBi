@@ -10,13 +10,13 @@ After epoch 14, we apply a learning rate decay strategy which multiplies the lea
 
 class LrScheduler:
 
-    def __init__(self, optimizer, init_lr=1.5e-4, peak_lr=6e-4, switch=[7, 14], gamma=0.25):
+    def __init__(self, optimizer, init_lr=1.5e-4, peak_lr=6e-4, switch=[7, 14], gamma=0.25, last_epoch=0):
         """
         initializes the learning rate scheduler.
         This should be done before training has started (at epoch 0)
         """
         self.optimizer = optimizer
-        self.last_epoch = 0
+        self.last_epoch = last_epoch
         self.lr = init_lr
         self.switch = switch
         self.gamma1 = (peak_lr - init_lr)/self.switch[0]

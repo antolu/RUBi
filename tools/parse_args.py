@@ -57,7 +57,7 @@ def parse_arguments():
                         help="Number of workers for training the network")
     parser.add_argument('--seed', default=123, type=int,
                         help="The random seed for VQA-CP")
-    parser.add_argument('--resume', default='', type=str)
+    parser.add_argument('--resume', default=False, type=bool)
     parser.add_argument('--start-epoch', default=0, type=int, dest="start_epoch",
                         help="The epoch to start/resume training at")
     parser.add_argument('--patience', default=3, type=int)

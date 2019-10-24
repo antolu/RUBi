@@ -6,7 +6,7 @@ import torch
 import torch.optim as optim
 import torch.utils.data as data
 import os
-from tqdm import trange
+from tqdm import tqdm
 from math import ceil
 import numpy as np
 
@@ -83,19 +83,19 @@ if args.train:
         model, optimizer = amp.initialize(model, optimizer, opt_level="O1")
 
     if args.pretrained_model:
-        optimizer.load_state_dict(args.pretrained_model["optimizer"])
+        optimizer.load_state_dict(pretrained_model["optimizer"])
         if args.fp16:
-            amp.load_state_dict(args.pretrained_model["amp"])
+            amp.load_state_dict(pretrained_model["amp"])
 
     if args.fp16:
-        scheduler = LrScheduler(optimizer.optimizer)
+        scheduler = LrScheduler(optimizer.optimizer, last_epoch=args.start_epoch)
     else:
-        scheduler = LrScheduler(optimizer)
+        scheduler = LrScheduler(optimizer, last_epoch=args.start_epoch)
 
     es = EarlyStopping(min_delta=args.eps, patience=args.patience)
 
     try:
-        with trange(args.no_epochs) as t:
+        with tqdm(range(args.start_epoch, args.no_epochs)) as t:
             for epoch in t:
 
                 # assume inputs is a dict
@@ -142,9 +142,8 @@ if args.train:
                     if args.fp16:
                         checkpoint['amp'] = amp.state_dict()
 
-                    filename = args.baseline + "_epoch_{}_dataset_{}_{}_{}.pt".format(epoch+1, args.dataset,
-                                                                                      args.answer_type,
-                                                                                      timestamp)
+                    filename = args.baseline + "_{}_epoch_{}_dataset_{}_{}.pt".format(timestamp, epoch+1, args.dataset,
+                                                                                      args.answer_type)
                     torch.save(checkpoint, os.path.join(args.dir_model, filename))
 
                 if es.step(smooth_loss):
@@ -164,9 +163,8 @@ if args.train:
         if args.fp16:
             checkpoint['amp'] = amp.state_dict()
 
-        filename = args.baseline + "_epoch_{}_dataset_{}_{}_{}.pt".format(epoch+1, args.dataset,
-                                                                          args.answer_type, 
-                                                                          timestamp)
+        filename = args.baseline + "_{}_epoch_{}_dataset_{}_{}.pt".format(timestamp, epoch+1, args.dataset,
+                                                                          args.answer_type)
         torch.save(checkpoint, os.path.join(args.dir_model, filename))
         losses_writer.close()
 
