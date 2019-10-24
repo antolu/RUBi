@@ -20,6 +20,7 @@ from utilities.schedule_lr import LrScheduler
 
 from dataloader import DataLoaderVQA
 from utilities.test import compute_acc
+from utilities.vocabulary_mapping import load_vocab
 
 
 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -29,13 +30,18 @@ args = parse_arguments()
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 print("Using device {}.".format(device))
 
-dataset = DataLoaderVQA(args)
+print("Loading vocabulary")
+vocab, vocab2id, answer2idx, idx2answer = load_vocab(args)
+
+print("Loading datasets")
+dataset = DataLoaderVQA(args, vocab, vocab2id, answer2idx)
 dataloader = data.DataLoader(dataset, batch_size=args.batchsize, num_workers=args.workers, shuffle=True)
 #dataloader = DataLoaderVQA(args)
 
+print("Initialising model")
 model = None
 if args.baseline == "rubi":
-    model = BaselineNet(dir_st=args.dir_st, vocab=dataset.get_vocab()).to(device)
+    model = BaselineNet(dir_st=args.dir_st, vocab=vocab).to(device)
 elif args.baseline == "san":
     raise NotImplementedError()
 elif args.baseline == "updn":
@@ -54,6 +60,7 @@ if args.pretrained_model:
 
     
 if args.train:
+    print("=> Entering training mode")
     
     losses_writer = open(os.path.join(args.dir_model, f"losses_{timestamp}.csv"), "w")
     losses_writer.write("epoch, loss, smooth_loss")
@@ -114,7 +121,7 @@ if args.train:
                     else:
                         smooth_loss = current_loss.item()
                     
-                    losses_writer.write("{}, {}, {}".format(epoch, current_loss.item(), smooth_loss))
+                    losses_writer.write("{}, {}, {}\n".format(epoch, current_loss.item(), smooth_loss))
                     
                     t.set_description(
                         f"E:{epoch} | "
@@ -125,7 +132,20 @@ if args.train:
                 scheduler.step()
 
                 # early stopping if loss hasn't improved
-                
+
+                if epoch + 1 % 5 == 0:
+                    checkpoint = {
+                        'model': model.state_dict(),
+                        'optimizer': optimizer.state_dict()
+                    }
+                    if args.fp16:
+                        checkpoint['amp'] = amp.state_dict()
+
+                    filename = args.baseline + "_epoch_{}_dataset_{}_{}_{}.pt".format(epoch, args.dataset,
+                                                                                      args.answer_type,
+                                                                                      timestamp)
+                    torch.save(checkpoint, os.path.join(args.dir_model, filename))
+
                 if es.step(smooth_loss):
                     print("Early stop activated")
                     break
