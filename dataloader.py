@@ -289,7 +289,7 @@ class DataLoaderVQA(data.Dataset):
         # item returned from the dataset
         item = {
             'img_embed': img_embedding,
-            'boxes': boxes
+            'boxes': boxes,
             'image': image,
             'question': question,  # in natural language
             'quest_vocab_vec': quest_vocab_vec.type(torch.LongTensor),
