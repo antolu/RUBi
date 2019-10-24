@@ -241,16 +241,31 @@ class DataLoaderVQA(data.Dataset):
     def __getitem__(self, index):
         """Returns data sample as a dict with keys: img_embed, question, answer"""
 
+        out = self.get(index)
+
+        del out['answer']
+        del out['question']
+        del out['boxes']
+
+        return out
+
+    def get(self, index):
+        """Returns data sample as a dict with keys: img_embed, question, answer"""
+
         # Load image & apply transformation
-        if self.args_dict.baseline == 'san' or self.args_dict.test:
-            image = Image.open(self.images_path.iloc[index]).convert('RGB')
+        if self.args_dict.baseline == 'san' or self.args_dict.eval_metric == "attention":
+            image = Image.open(self.images_path.iloc[index])
+            if image.getbands()[0] == 'L':
+                image = image.convert('RGB')
             if self.transform is not None:
                 image = self.transform(image)
         else:
             image = torch.Tensor()
-        
+
         # Image embedding
-        img_embedding = self.get_visual_features(self.img_embeddings_path.iloc[index])['features']
+        img_features = self.get_visual_features(self.img_embeddings_path.iloc[index])
+        img_embedding = img_features['features']
+        boxes = img_features['boxes']
 
         # Question
         question = self.questions.iloc[index]
@@ -270,20 +285,19 @@ class DataLoaderVQA(data.Dataset):
         answer = self.answers.iloc[index]
         answer_one_hot = torch.zeros(3000)  # vector used for the loss
         # answer_one_hot[self.answer2idx[answer]] = 1.0
-        
+
         # item returned from the dataset
         item = {
             'img_embed': img_embedding,
+            'boxes': boxes
             'image': image,
-            # 'question': question,  # in natural language
+            'question': question,  # in natural language
             'quest_vocab_vec': quest_vocab_vec.type(torch.LongTensor),
             'quest_size': torch.Tensor([len(word_tokenize(question))]).type(torch.LongTensor),  # size of each question
-            # 'answer': answer,  # in natural language
-            #'answer_one_hot': answer_one_hot,
+            'answer': answer,  # in natural language
+            # 'answer_one_hot': answer_one_hot,
             'idx_answer': torch.Tensor([self.answer2idx[answer]]).type(torch.LongTensor)  # class indices
         }
 
         return item
-
-
 

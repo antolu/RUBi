@@ -3,6 +3,9 @@ import torch
 import torch.nn as nn
 import cv2
 import matplotlib.pyplot as plt
+from PIL import Image
+import os
+
 
 def compute_acc(labels, predictions):
     """
@@ -13,7 +16,8 @@ def compute_acc(labels, predictions):
 
     predictions = softmax(predictions["logits"])
 
-    correct = (torch.max(predictions, dim=1) == labels).float().sum()
+    mmax, argmax = torch.max(predictions, dim=1)
+    correct = (argmax == labels).float().sum()
 
     return correct
 
@@ -25,7 +29,7 @@ def get_attention_mask(input_data, predictions):
 
     orig_img = input_data["img_embed"].permute(1, 2, 0).numpy()
 
-    s_img = # DO SOME CROPPING
+    s_img = None# DO SOME CROPPING
     l_img = cv2.imread("larger_image.jpg")
     x_offset = y_offset = 50
     orig_img[y_offset:y_offset + s_img.shape[0], x_offset:x_offset + s_img.shape[1]] = s_img
@@ -44,3 +48,13 @@ def disp_tensor(tnsr):
     plt.show()
     plt.clf()
 
+def save_img(img, caption, filename, dir=""):
+    if type(img) is torch.Tensor:
+        img = img.detach().permute(1, 2, 0).numpy()
+        im = Image.fromarray(img.astype('uint8'))
+    else:
+        im = img
+    im.save(os.path.join(dir, "img_{}.jpeg".format(filename)))
+
+    with open(os.path.join(dir, "cap_{}.txt".format(filename)), "w") as f:
+        f.write(caption + "\n")

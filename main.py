@@ -8,6 +8,7 @@ import torch.utils.data as data
 import os
 from tqdm import trange
 from math import ceil
+import numpy as np
 
 from models.rubi.baseline_net import BaselineNet
 from models.rubi.rubi import RUBi
@@ -20,7 +21,7 @@ from utilities.schedule_lr import LrScheduler
 
 from dataloader import DataLoaderVQA
 from utilities.vocabulary_mapping import load_vocab
-from utilities.test import compute_acc
+from utilities.test import compute_acc, get_attention_mask, disp_tensor
 
 
 timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
@@ -63,7 +64,7 @@ if args.train:
     print("=> Entering training mode")
     
     losses_writer = open(os.path.join(args.dir_model, f"losses_{timestamp}.csv"), "w")
-    losses_writer.write("epoch, loss, smooth_loss")
+    losses_writer.write("epoch, loss, smooth_loss\n")
     
     # tensorboard Writer will output to /runs directory
     tensorboard_writer = SummaryWriter(filename_suffix='train')
@@ -192,6 +193,31 @@ elif args.test:
 
         print(f"Accuracy {accuracy} on dataset {args.dataset} with answer type {args.answer_type}")
     elif args.eval_metric == "attention":
+
+        while True:
+            # Pick a random sample from the training set
+            i = np.random.choice(len(dataset))
+            inputs, inputs_torch = dataset.get(i), dataset[i]
+
+            for key, value in inputs_torch:
+                inputs_torch[key] = value.to(device).unsqueeze(0)
+
+            print("The question is \"{}\", which has the answer \"{}\"".format(inputs['question'], inputs['answer']))
+
+            output = model(inputs_torch)
+
+            attention_mask = get_attention_mask(inputs, output)
+
+            disp_tensor(attention_mask)
+
+            # Wait for user input
+            try:
+                cap = input()
+                if cap == 'q':
+                    break
+            except EOFError:
+                exit()
+
         raise NotImplementedError()
     
 
