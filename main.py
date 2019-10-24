@@ -134,7 +134,7 @@ if args.train:
 
                 # early stopping if loss hasn't improved
 
-                if epoch + 1 % 5 == 0:
+                if (epoch + 1) % 5 == 0:
                     checkpoint = {
                         'model': model.state_dict(),
                         'optimizer': optimizer.state_dict()
@@ -142,7 +142,7 @@ if args.train:
                     if args.fp16:
                         checkpoint['amp'] = amp.state_dict()
 
-                    filename = args.baseline + "_epoch_{}_dataset_{}_{}_{}.pt".format(epoch, args.dataset,
+                    filename = args.baseline + "_epoch_{}_dataset_{}_{}_{}.pt".format(epoch+1, args.dataset,
                                                                                       args.answer_type,
                                                                                       timestamp)
                     torch.save(checkpoint, os.path.join(args.dir_model, filename))
@@ -151,7 +151,7 @@ if args.train:
                     print("Early stop activated")
                     break
 
-        print("Training complete after {} epochs.".format(epoch))
+        print("Training complete after {} epochs.".format(epoch+1))
     except KeyboardInterrupt:
         print("Training canceled. ")
         pass
@@ -164,7 +164,7 @@ if args.train:
         if args.fp16:
             checkpoint['amp'] = amp.state_dict()
 
-        filename = args.baseline + "_epoch_{}_dataset_{}_{}_{}.pt".format(epoch, args.dataset, 
+        filename = args.baseline + "_epoch_{}_dataset_{}_{}_{}.pt".format(epoch+1, args.dataset,
                                                                           args.answer_type, 
                                                                           timestamp)
         torch.save(checkpoint, os.path.join(args.dir_model, filename))
