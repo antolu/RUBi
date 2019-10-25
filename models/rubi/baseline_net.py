@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from models.mlp import MLP
-from models.skip_thoughts import BiSkip
+from models.skip_thoughts import BayesianUniSkip
 from models.block import Block
 from collections import OrderedDict
 
