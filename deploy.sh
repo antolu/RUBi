@@ -282,16 +282,27 @@ getSkipThoughtData() {
     mkdir -p skip_thoughts
     cd skip_thoughts
     
-    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/dictionary.txt
-    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/utable.npy
-    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/uni_skip.npz
-    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/btable.npy
-    axel -qn20 http://www.cs.toronto.edu/~rkiros/models/bi_skip.npz
+    wget http://www.cs.toronto.edu/~rkiros/models/dictionary.txt
+    wget http://www.cs.toronto.edu/~rkiros/models/utable.npy
+    wget http://www.cs.toronto.edu/~rkiros/models/uni_skip.npz
+    wget http://www.cs.toronto.edu/~rkiros/models/btable.npy
+    wget http://www.cs.toronto.edu/~rkiros/models/bi_skip.npz
 
     cd ..
 }
 
 
+#............................................................
+#
+# Install NLTK data like 'punkt'
+#
+#............................................................
+installNLTKData () {
+	echo "=> Installing NLTK Data"
+	$SUDO docker exec -it -w /home/RUBi pytorch-rubi mkdir /nltk_data
+	$SUDO docker exec -it -w /home/RUBi pytorch-rubi chmod 777 /nltk_data
+	$SUDO docker exec -it -w /home/RUBi -u $(id -u):$(id -g) pytorch-rubi python3 tools/install_nltk_data.py	
+}
 #............................................................
 #
 # Checks whether Docker needs sudo permissions or nor
@@ -428,6 +439,10 @@ deploy() {
 
         runPyTorchContainer
         splitVisualFeatures
+	installNLTKData
+
+	mkdir -p checkpoints
+	mkdir -p plots
     else
         checkDockerPermissions
 

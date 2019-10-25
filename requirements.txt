@@ -11,3 +11,5 @@ nltk
 tensorboard
 pandas
 tqdm
+opencv-python
+matplotlib

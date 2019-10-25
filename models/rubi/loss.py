@@ -20,7 +20,8 @@ class RUBiLoss:
     def __init__(self, lambda1, lambda2):
         self.lambda1 = lambda1
         self.lambda2 = lambda2
-        self.loss = nn.CrossEntropyLoss()
+        self.loss1 = nn.CrossEntropyLoss()
+        self.loss2 = nn.CrossEntropyLoss()
 
     """
     Parameters:
@@ -28,8 +29,8 @@ class RUBiLoss:
     - labels: one-hot encodings
     """
     def __call__(self, labels, logits):
-        L_QM = self.loss(logits["logits_rubi"], labels)
-        L_QO = self.loss(logits["logits_q"], labels)
+        L_QM = self.loss1(logits["logits_rubi"], labels)
+        L_QO = self.loss2(logits["logits_q"], labels)
 
         return self.lambda1 * L_QM + self.lambda2 * L_QO
 

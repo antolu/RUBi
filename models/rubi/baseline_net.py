@@ -2,7 +2,7 @@ import torch
 import torch.nn as nn
 from torch.autograd import Variable
 from models.mlp import MLP
-from models.skip_thoughts import BiSkip
+from models.skip_thoughts import BayesianUniSkip
 from models.block import Block
 from collections import OrderedDict
 
@@ -12,7 +12,7 @@ class BaselineNet(nn.Module):
 
         # also initialise question and image encoder
         self.skip_thought = QuestionEncoder(dir_st, vocab)
-        self.fusion_block = Block([text_emb_size, img_emb_size], 2048, chunks=15, rank=15)
+        self.fusion_block = Block([text_emb_size, img_emb_size], 2048, mm_dim=1000, chunks=15, rank=15)
         self.mlp = MLP(2048, mlp_dimensions)
 
     def forward(self, inputs):
@@ -79,7 +79,7 @@ class QuestionEncoder(nn.Module):
     """
     def __init__(self, dir_st, vocab):
         super().__init__()
-        self.text_encoder = BiSkip(dir_st, vocab)
+        self.text_encoder = BayesianUniSkip(dir_st, vocab, dropout=0.25, fixed_emb=False)
 
         self.attn_extractor = nn.Sequential(OrderedDict([
             ("lin1", nn.Linear(2400, 512)),

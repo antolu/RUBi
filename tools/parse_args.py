@@ -42,7 +42,7 @@ def parse_arguments():
     parser.add_argument("--eps", type=float, default=1e-4,
                         help="The difference between losses between iterations \
                         to break.")
-    parser.add_argument("-l", "--loss-weights", nargs=2, type=float,
+    parser.add_argument("-l", "--loss-weights", nargs=2, type=float, dest="loss_weights",
                         default=(1, 1), help="The weights which determine the \
                         importance of the RUBi and question-only loss. ")
     parser.add_argument("--fp16", action="store_true",
@@ -51,12 +51,13 @@ def parse_arguments():
                         help="Which optimisation to use for mixed precision training.")
     parser.add_argument("--rubi", action="store_true",
                         help="Use RUBi question-only branch during training.")
+    parser.add_argument("--eval-metric", type=str, dest="eval_metric", default="accuracy", choices=["accuracy", "attention"])
 
     parser.add_argument('--workers', default=8, type=int,
                         help="Number of workers for training the network")
     parser.add_argument('--seed', default=123, type=int,
                         help="The random seed for VQA-CP")
-    parser.add_argument('--resume', default='', type=str)
+    parser.add_argument('--resume', default=False, type=bool)
     parser.add_argument('--start-epoch', default=0, type=int, dest="start_epoch",
                         help="The epoch to start/resume training at")
     parser.add_argument('--patience', default=3, type=int)

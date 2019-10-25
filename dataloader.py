@@ -15,6 +15,9 @@ from PIL import Image
 class DataLoaderVQA(data.Dataset):
     def __init__(self,
                  args_dict,
+                 vocab,
+                 vocab2id,
+                 answer2idx,
                  transform = transforms.Compose([
                                     transforms.Resize(256),  # rescale the image keeping the original aspect ratio
                                     transforms.CenterCrop(256),  # we get only the center of that rescaled
@@ -47,21 +50,23 @@ class DataLoaderVQA(data.Dataset):
         self.trainval_features_path = trainval_features_path
         self.test_features_path = test_features_path
         self.dataset = args_dict.dataset  # vqacp_v2 | vqa_v2
-        self.vocab = []  # vocab related with the dataset questions
+        self.vocab = vocab  # vocab related with the dataset questions
+        self.vocab2id = vocab2id
+        self.answer2idx = answer2idx
         self.question_vecs = {}
         
         if args_dict.answer_type == 'all':
-            self.answer_type = ['yes/no', 'number', 'other']
+            self.answer_type = set(['yes/no', 'number', 'other'])
         else:
             self.answer_type = [args_dict.answer_type]
         
 
         # only use the top 3000 answers
-        df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_annotations.json'))
-        top_3000_answer = list(df_annot['multiple_choice_answer'].value_counts().index)[:3000]
-        self.answer2idx = {}
-        for idx, answer in enumerate(top_3000_answer):
-            self.answer2idx[answer] = idx
+        # df_annot = pd.read_json(os.path.join(self.dir_data, 'vqacp_v2', 'vqacp_v2_train_annotations.json'))
+        # top_3000_answer = list(df_annot['multiple_choice_answer'].value_counts().index)[:3000]
+        # self.answer2idx = {}
+        # for idx, answer in enumerate(top_3000_answer):
+        #     self.answer2idx[answer] = idx
 
         # choose train or test dataset
         if self.dataset == 'vqa-v2-cp':
@@ -101,13 +106,13 @@ class DataLoaderVQA(data.Dataset):
                                     'image_id', 'answer_type', 'question_id']],
                           df_quest[['question', 'question_id']], on='question_id')
 
-        df = df[(df['multiple_choice_answer'].isin(top_3000_answer)) &
+        df = df[(df['multiple_choice_answer'].isin(answer2idx)) &
                 (df['answer_type'].isin(self.answer_type))]
 
         self.images_path = df.apply(lambda x: self.get_img_path(x), axis=1)
         self.questions = df['question'].apply(self.preprocess_sentence) 
-        self.vocab = self.get_vocab()
-        self.vocab2id = self.get_vocab2id()
+        #self.vocab = self.get_vocab()
+        #self.vocab2id = self.get_vocab2id()
         self.answers = df['multiple_choice_answer']#.apply(self.preprocess_sentence)
         self.img_embeddings_path = df['image_id'].apply(lambda x: self.get_visual_features_path(x))
 
@@ -236,16 +241,33 @@ class DataLoaderVQA(data.Dataset):
     def __getitem__(self, index):
         """Returns data sample as a dict with keys: img_embed, question, answer"""
 
+        out = self.get(index)
+
+        del out['answer']
+        del out['question']
+        del out['boxes']
+
+        return out
+
+    def get(self, index):
+        """Returns data sample as a dict with keys: img_embed, question, answer"""
+
         # Load image & apply transformation
-        if self.args_dict.baseline == 'san' or self.args_dict.test:
-            image = Image.open(self.images_path.iloc[index]).convert('RGB')
-            if self.transform is not None:
+        if self.args_dict.baseline == 'san' or self.args_dict.eval_metric == "attention":
+            image = Image.open(self.images_path.iloc[index])
+            if image.getbands()[0] == 'L':
+                image = image.convert('RGB')
+            if self.transform is not None and self.args_dict.eval_metric != "attention":
                 image = self.transform(image)
+            else:
+                image = torch.Tensor(image).permute(2, 0, 1)
         else:
             image = torch.Tensor()
-        
+
         # Image embedding
-        img_embedding = self.get_visual_features(self.img_embeddings_path.iloc[index])['features']
+        img_features = self.get_visual_features(self.img_embeddings_path.iloc[index])
+        img_embedding = img_features['features']
+        boxes = img_features['boxes']
 
         # Question
         question = self.questions.iloc[index]
@@ -265,20 +287,19 @@ class DataLoaderVQA(data.Dataset):
         answer = self.answers.iloc[index]
         answer_one_hot = torch.zeros(3000)  # vector used for the loss
         # answer_one_hot[self.answer2idx[answer]] = 1.0
-        
+
         # item returned from the dataset
         item = {
             'img_embed': img_embedding,
+            'boxes': boxes,
             'image': image,
-            # 'question': question,  # in natural language
+            'question': question,  # in natural language
             'quest_vocab_vec': quest_vocab_vec.type(torch.LongTensor),
             'quest_size': torch.Tensor([len(word_tokenize(question))]).type(torch.LongTensor),  # size of each question
-            # 'answer': answer,  # in natural language
-            #'answer_one_hot': answer_one_hot,
+            'answer': answer,  # in natural language
+            # 'answer_one_hot': answer_one_hot,
             'idx_answer': torch.Tensor([self.answer2idx[answer]]).type(torch.LongTensor)  # class indices
         }
 
         return item
-
-
 
