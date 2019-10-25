@@ -42,7 +42,7 @@ def parse_arguments():
     parser.add_argument("--eps", type=float, default=1e-4,
                         help="The difference between losses between iterations \
                         to break.")
-    parser.add_argument("-l", "--loss-weights", nargs=2, type=float,
+    parser.add_argument("-l", "--loss-weights", nargs=2, type=float, dest="loss_weights",
                         default=(1, 1), help="The weights which determine the \
                         importance of the RUBi and question-only loss. ")
     parser.add_argument("--fp16", action="store_true",

@@ -50,7 +50,7 @@ elif args.baseline == "updn":
 
 if args.rubi:
     model = RUBi(model).to(device)
-    loss = RUBiLoss(args["loss-weights"][0], args["loss-weights"][1])
+    loss = RUBiLoss(args.loss_weights[0], args.loss_weights[1])
 else:
     loss = BaselineLoss()
 smooth_loss = None
@@ -177,19 +177,25 @@ if args.train:
 elif args.test:
     model.eval()
     no_correct = 0
+    total_evaluated = 0
 
     if args.eval_metric == "accuracy":
-        for i, inputs in enumerate(dataloader):
-            for key, value in inputs:
+        t = tqdm(dataloader)
+        for i, inputs in enumerate(t):
+            for key, value in inputs.items():
                 inputs[key] = value.to(device)
 
             predictions = model(inputs)
-            test_loss = loss(inputs["idx_answer"], predictions)
-            no_correct += compute_acc(inputs['idx_answer'], predictions)
+            test_loss = loss(inputs["idx_answer"].squeeze(1), predictions)
+            no_correct += compute_acc(inputs['idx_answer'].squeeze(1), predictions)
+            total_evaluated += inputs['quest_vocab_vec'].shape[0]
+
+            current_acc = no_correct / total_evaluated
+            t.set_description(f"Loss: {test_loss.item()} | accuracy:  {current_acc.item()}")
 
         accuracy = no_correct / len(dataset)
 
-        print(f"Accuracy {accuracy} on dataset {args.dataset} with answer type {args.answer_type}")
+        print(f"Final accuracy {accuracy} on dataset {args.dataset} with answer type {args.answer_type}")
     elif args.eval_metric == "attention":
 
         while True:
@@ -197,7 +203,7 @@ elif args.test:
             i = np.random.choice(len(dataset))
             inputs, inputs_torch = dataset.get(i), dataset[i]
 
-            for key, value in inputs_torch:
+            for key, value in inputs_torch.items():
                 inputs_torch[key] = value.to(device).unsqueeze(0)
 
             print("The question is \"{}\", which has the answer \"{}\"".format(inputs['question'], inputs['answer']))
@@ -216,6 +222,5 @@ elif args.test:
             except EOFError:
                 exit()
 
-        raise NotImplementedError()
     
 

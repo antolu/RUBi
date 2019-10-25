@@ -257,8 +257,10 @@ class DataLoaderVQA(data.Dataset):
             image = Image.open(self.images_path.iloc[index])
             if image.getbands()[0] == 'L':
                 image = image.convert('RGB')
-            if self.transform is not None:
+            if self.transform is not None and self.args_dict.eval_metric != "attention":
                 image = self.transform(image)
+            else:
+                image = torch.Tensor(image).permute(2, 0, 1)
         else:
             image = torch.Tensor()
 

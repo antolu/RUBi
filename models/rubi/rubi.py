@@ -26,15 +26,15 @@ class RUBi(nn.Module):
         self.slp = nn.Linear(3000, 3000)
 
     def forward(self, inputs):
-        text = inputs["q_text"]
-        visual_emb = inputs["visual_emb"]
+        text = inputs["quest_vocab_vec"]
+        visual_emb = inputs["img_embed"]
         
-        base_out = self.model(text, visual_emb)
+        base_out = self.model(inputs)
 
         q_emb = base_out['q_emb'].detach()
         x = self.mlp(q_emb)
 
-        mask = nn.Sigmoid(x)
+        mask = torch.sigmoid(x)
         aQM = mask * base_out['logits']
 
         aQO = self.slp(x)
