@@ -24,7 +24,7 @@ class MLP(nn.Module):
         for lyr in range(len(dimensions) - 1):
             layers.append(("linear" + str(lyr + 1),
                            nn.Linear(dimensions[lyr], dimensions[lyr+1])))
-            if activation != "none":
+            if activation != "none" and lyr != len(dimensions) - 2:
                 layers.append(("relu" + str(lyr + 1), nn.ReLU()))
 
         self.mlp = nn.Sequential(OrderedDict(layers))
