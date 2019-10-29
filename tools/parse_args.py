@@ -20,7 +20,7 @@ def parse_arguments():
     parser.add_argument('--pretrained-model', dest='pretrained_model', default=None,
                         help='path to pretrained-model')
     parser.add_argument('--answer-type', default='all', type=str, dest="answer_type",
-                        choices=["all", "number", "yes-no", "other"], help='answer type (all | number | yes-no | other)')
+                        choices=["all", "number", "yes/no", "other"], help='answer type (all | number | yes/no | other)')
 
 
     # Arguments concerning training and testing the model
